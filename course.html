@@ -23,7 +23,7 @@ function getAssessmentResponses(){
     const responses={};
     for(const name of quizVarNames){
       const value=player.GetVar(name);
-      responses[name]=value??'';
+      if(value!=='' && value!==null && value!==undefined){responses[name]=value;}
     }
     return responses;
   }catch(e){return {};}
@@ -33,25 +33,6 @@ function touch(completed=false){
   const responses=getAssessmentResponses();
   upsertRecord({...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed, responses});
 }
-function saveAndReturnToDashboard(){
-  touch(true);
-  location.href='index.html';
-}
-function installSaveExitOverride(){
-  const frame=document.getElementById('assessmentFrame');
-  frame.addEventListener('load',()=>{
-    try{
-      const win=frame.contentWindow;
-      const wrappedClose=()=>saveAndReturnToDashboard();
-      win.close=wrappedClose;
-      if(win.top&&win.top!==win){win.top.close=wrappedClose;}
-    }catch(e){/* best-effort only */}
-  });
-}
 loadQuizVarNames();
-installSaveExitOverride();
-setInterval(()=>touch(false),5000);
-window.addEventListener('beforeunload',()=>touch(false));
-window.addEventListener('pagehide',()=>touch(false));
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden') touch(false)});
+setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>touch(false));
 </script></body></html>
