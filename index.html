@@ -17,7 +17,6 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
   <input id="email" placeholder="Learner email">
   <button id="saveBtn">Save learner</button>
   <button id="launchBtn">Launch assessment</button>
-  <button id="completeBtn">Mark completed</button>
   <p class="small">This version stores records only in the current browser.</p>
 </div>
 <div class="card">
@@ -28,6 +27,11 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
 <script>
 const KEY='lungAssessmentLocalRecords';
 const USER='lungAssessmentLocalUser';
+const nameInput=document.getElementById('name');
+const emailInput=document.getElementById('email');
+const saveBtn=document.getElementById('saveBtn');
+const launchBtn=document.getElementById('launchBtn');
+const exportBtn=document.getElementById('exportBtn');
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
@@ -49,20 +53,18 @@ function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"
 function exportCSV(){
   const rows=loadRecords(); if(!rows.length) return;
   const cols=['name','email','started','completed','started_at','last_opened_at','minutes_spent'];
-  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(r[c])).join(','))).join('
-');
+  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(r[c])).join(','))).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
 }
-const u=loadUser(); name.value=u.name||''; email.value=u.email||'';
-saveBtn.onclick=()=>{saveUser({name:name.value.trim(),email:email.value.trim()}); alert('Saved')}
+const u=loadUser(); nameInput.value=u.name||''; emailInput.value=u.email||'';
+saveBtn.onclick=()=>{saveUser({name:nameInput.value.trim(),email:emailInput.value.trim()}); alert('Saved')}
 launchBtn.onclick=()=>{
   const now=new Date().toISOString();
-  const u={name:name.value.trim(),email:email.value.trim()}; saveUser(u);
+  const u={name:nameInput.value.trim(),email:emailInput.value.trim()}; saveUser(u);
   upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
   location.href='course.html';
 }
-completeBtn.onclick=()=>{const u=loadUser(); if(!u.email){alert('Enter email first'); return;} upsertRecord({...u,completed:true, last_opened_at:new Date().toISOString()}); alert('Marked complete')}
 exportBtn.onclick=exportCSV; render();
 </script>
 </body></html>
