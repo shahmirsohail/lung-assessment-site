@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lung Ultrasound Assessment</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;line-height:1.5}
+.card{border:1px solid #ddd;border-radius:10px;padding:20px;margin:20px 0}
+input,button{padding:10px;font-size:16px;margin:6px 0;width:100%;max-width:420px}
+button{cursor:pointer}
+table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid #ddd;padding:8px;text-align:left}
+.small{color:#555;font-size:14px}
+</style></head>
+<body>
+<h1>Lung Ultrasound Assessment</h1>
+<div class="card">
+  <h2>Learner details</h2>
+  <input id="name" placeholder="Learner name">
+  <input id="email" placeholder="Learner email">
+  <button id="saveBtn">Save learner</button>
+  <button id="launchBtn">Launch assessment</button>
+  <button id="completeBtn">Mark completed</button>
+  <p class="small">This version stores records only in the current browser.</p>
+</div>
+<div class="card">
+  <h2>Local records</h2>
+  <button id="exportBtn">Export CSV</button>
+  <div id="records"></div>
+</div>
+<script>
+const KEY='lungAssessmentLocalRecords';
+const USER='lungAssessmentLocalUser';
+function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
+function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
+function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
+function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
+function upsertRecord(update){
+  let records=loadRecords();
+  let i=records.findIndex(r=>r.email===update.email && update.email);
+  if(i<0){records.push(update)} else {records[i]={...records[i],...update}}
+  saveRecords(records); render();
+}
+function render(){
+  const r=loadRecords();
+  if(!r.length){document.getElementById('records').innerHTML='<p>No records yet.</p>'; return;}
+  let html='<table><tr><th>Name</th><th>Email</th><th>Started</th><th>Completed</th><th>Start</th><th>Last opened</th><th>Minutes</th></tr>';
+  for(const x of r){html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.started_at||''}</td><td>${x.last_opened_at||''}</td><td>${x.minutes_spent||0}</td></tr>`}
+  html+='</table>'; document.getElementById('records').innerHTML=html;
+}
+function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}
+function exportCSV(){
+  const rows=loadRecords(); if(!rows.length) return;
+  const cols=['name','email','started','completed','started_at','last_opened_at','minutes_spent'];
+  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(r[c])).join(','))).join('
+');
+  const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
+}
+const u=loadUser(); name.value=u.name||''; email.value=u.email||'';
+saveBtn.onclick=()=>{saveUser({name:name.value.trim(),email:email.value.trim()}); alert('Saved')}
+launchBtn.onclick=()=>{
+  const now=new Date().toISOString();
+  const u={name:name.value.trim(),email:email.value.trim()}; saveUser(u);
+  upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
+  location.href='course.html';
+}
+completeBtn.onclick=()=>{const u=loadUser(); if(!u.email){alert('Enter email first'); return;} upsertRecord({...u,completed:true, last_opened_at:new Date().toISOString()}); alert('Marked complete')}
+exportBtn.onclick=exportCSV; render();
+</script>
+</body></html>
