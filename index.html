@@ -49,8 +49,7 @@ function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"
 function exportCSV(){
   const rows=loadRecords(); if(!rows.length) return;
   const cols=['name','email','started','completed','started_at','last_opened_at','minutes_spent'];
-  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(r[c])).join(','))).join('
-');
+  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(r[c])).join(','))).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
 }
