@@ -17,7 +17,6 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
   <input id="email" placeholder="Learner email">
   <button id="saveBtn">Save learner</button>
   <button id="launchBtn">Launch assessment</button>
-  <button id="completeBtn">Mark completed</button>
   <p class="small">This version stores records only in the current browser.</p>
 </div>
 <div class="card">
@@ -61,7 +60,6 @@ launchBtn.onclick=()=>{
   upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
   location.href='course.html';
 }
-completeBtn.onclick=()=>{const u=loadUser(); if(!u.email){alert('Enter email first'); return;} upsertRecord({...u,completed:true, last_opened_at:new Date().toISOString()}); alert('Marked complete')}
 exportBtn.onclick=exportCSV; render();
 </script>
 </body></html>
