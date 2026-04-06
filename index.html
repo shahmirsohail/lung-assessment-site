@@ -72,20 +72,14 @@ const u=loadUser(); nameInput.value=u.name||''; emailInput.value=u.email||'';
 saveBtn.onclick=()=>{saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:u.attempt_id||''}); alert('Saved')}
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
-  const name=nameInput.value.trim();
-  const email=emailInput.value.trim().toLowerCase();
-  if(!email){alert('Please enter learner email'); return;}
-  const attempt_id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-  const payload={attempt_id,name,email,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false,responses:{}};
-  try{
-    await postJson('/api/attempt/start', payload);
-  }catch(err){
-    alert(`Warning: could not save to server (${err.message}). Local backup still saved.`);
-  }
-  saveUser({name,email,attempt_id});
-  upsertRecord(payload);
-  location.href='course.html';
+  const u={name:nameInput.value.trim(),email:emailInput.value.trim()}; saveUser(u);
+  upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
+  const assessmentWindow=window.open('course.html','_blank');
+  if(!assessmentWindow){ location.href='course.html'; }
 }
-exportBtn.onclick=exportCSV; render();
+exportBtn.onclick=exportCSV;
+window.addEventListener('focus',render);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});
+render();
 </script>
 </body></html>
