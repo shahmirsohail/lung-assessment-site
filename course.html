@@ -32,7 +32,7 @@ function getAssessmentResponses(){
 async function postJson(url, body){
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
-  if(!res.ok || !data.ok){throw new Error(data.error||`Request failed (${res.status})`)}
+  if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
 function buildPayload(completed=false){
@@ -53,10 +53,8 @@ async function touch(completed=false){
   upsertRecord(payload);
   try{
     await postJson(completed?'/api/attempt/complete':'/api/attempt/progress', payload);
-    return {ok:true};
   }catch(e){
     console.warn('Server sync failed', e.message);
-    return {ok:false,error:e.message};
   }
 }
 loadQuizVarNames();
@@ -64,12 +62,7 @@ setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>
 document.getElementById('completeBtn').onclick=async ()=>{
   if(hasCompleted) return;
   hasCompleted=true;
-  const result=await touch(true);
-  if(!result.ok){
-    hasCompleted=false;
-    alert(`Submission failed: ${result.error}. Check Vercel logs and environment variables, then try again.`);
-    return;
-  }
+  await touch(true);
   alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
   location.href='index.html';
 };
