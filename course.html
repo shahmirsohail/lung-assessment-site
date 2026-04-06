@@ -7,8 +7,30 @@ let quizVarNames=[];
 let hasCompleted=false;
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
-function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
-const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
+function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
+function generateLearnerId(){
+  if(window.crypto?.randomUUID){return window.crypto.randomUUID();}
+  return 'learner-'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+}
+function ensureLearnerIdentity(){
+  const existingUser=loadUser();
+  if(existingUser.learner_id){return existingUser;}
+  const learner_id=generateLearnerId();
+  const updatedUser={...existingUser,learner_id};
+  saveUser(updatedUser);
+  const records=loadRecords();
+  let changed=false;
+  for(const record of records){
+    if(!record.learner_id){
+      record.learner_id=learner_id;
+      changed=true;
+    }
+  }
+  if(changed){saveRecords(records)}
+  return updatedUser;
+}
+function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.learner_id===update.learner_id && update.learner_id)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
+const user=ensureLearnerIdentity(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
 async function loadQuizVarNames(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
@@ -39,6 +61,7 @@ function buildPayload(completed=false){
   const mins=Math.round((Date.now()-start)/60000);
   return {
     attempt_id:user.attempt_id,
+    learner_id:user.learner_id||'',
     name:user.name||'',
     email:user.email||'',
     started:true,

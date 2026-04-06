@@ -41,9 +41,30 @@ function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
+function generateLearnerId(){
+  if(window.crypto?.randomUUID){return window.crypto.randomUUID();}
+  return 'learner-'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+}
+function ensureLearnerIdentity(){
+  const existingUser=loadUser();
+  if(existingUser.learner_id){return existingUser;}
+  const learner_id=generateLearnerId();
+  const updatedUser={...existingUser,learner_id};
+  saveUser(updatedUser);
+  const records=loadRecords();
+  let changed=false;
+  for(const record of records){
+    if(!record.learner_id){
+      record.learner_id=learner_id;
+      changed=true;
+    }
+  }
+  if(changed){saveRecords(records)}
+  return updatedUser;
+}
 function upsertRecord(update){
   let records=loadRecords();
-  let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email));
+  let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.learner_id===update.learner_id && update.learner_id));
   if(i<0){records.push(update)} else {records[i]={...records[i],...update}}
   saveRecords(records); render();
 }
@@ -68,11 +89,19 @@ async function postJson(url, body){
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
-const u=loadUser(); nameInput.value=u.name||''; emailInput.value=u.email||'';
-saveBtn.onclick=()=>{saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:u.attempt_id||''}); alert('Saved')}
+const identityUser=ensureLearnerIdentity();
+nameInput.value=identityUser.name||'';
+emailInput.value=identityUser.email||'';
+saveBtn.onclick=()=>{
+  const currentUser=ensureLearnerIdentity();
+  saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:currentUser.attempt_id||'',learner_id:currentUser.learner_id});
+  alert('Saved');
+}
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
-  const u={name:nameInput.value.trim(),email:emailInput.value.trim()}; saveUser(u);
+  const currentUser=ensureLearnerIdentity();
+  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
+  saveUser(u);
   upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
   const assessmentWindow=window.open('course.html','_blank');
   if(!assessmentWindow){ location.href='course.html'; }
