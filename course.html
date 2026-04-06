@@ -96,6 +96,7 @@ function buildPayload(completed=false){
   captureDebug.last_capture_at=nowIso;
   return {
     attempt_id:user.attempt_id,
+    learner_id:user.learner_id||'',
     name:user.name||'',
     email:user.email||'',
     started:true,
