@@ -1,19 +1,29 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button id="completeBtn">Submit & send results</button> <button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
 <script>
+const APP_VERSION='2026-04-06-course-hotfix-1';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 let quizVarNames=[];
+let hasCompleted=false;
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
-function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.email===update.email && update.email); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
-const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
+function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
+function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
+const user=loadUser();
+if(!user.attempt_id){
+  user.attempt_id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+  saveUser(user);
+}
+document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
+console.info('Loaded course.html version', APP_VERSION);
 async function loadQuizVarNames(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
     const txt=await res.text();
     quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
-  }catch(e){/* best-effort only */}
+    console.debug('[capture] Loaded quiz variable names', quizVarNames.length);
+  }catch(e){console.error('[capture-error] Failed to load quiz variable names', e)}
 }
 function getAssessmentResponses(){
   try{
@@ -25,14 +35,62 @@ function getAssessmentResponses(){
       const value=player.GetVar(name);
       if(value!=='' && value!==null && value!==undefined){responses[name]=value;}
     }
+    console.debug('[capture] Captured responses count', Object.keys(responses).length);
     return responses;
-  }catch(e){return {};}
+  }catch(e){
+    console.error('[capture-error] Failed to capture responses from Storyline player', e);
+    return {};
+  }
 }
-function touch(completed=false){
+async function postJson(url, body){
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
+  if(!res.ok || !data.ok){throw new Error(data.error||`Request failed (${res.status})`)}
+  return data;
+}
+function buildPayload(completed=false){
+  if(!user.attempt_id){throw new Error('Missing attempt_id. Return to index and relaunch assessment.');}
+  if(!user.email){throw new Error('Missing learner email. Return to index and save learner details.');}
   const mins=Math.round((Date.now()-start)/60000);
-  const responses=getAssessmentResponses();
-  upsertRecord({...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed, responses});
+  return {
+    attempt_id:user.attempt_id,
+    name:user.name||'',
+    email:user.email||'',
+    started:true,
+    completed,
+    last_opened_at:new Date().toISOString(),
+    minutes_spent:mins,
+    responses:getAssessmentResponses(),
+  };
+}
+async function touch(completed=false){
+  const payload=buildPayload(completed);
+  upsertRecord(payload);
+  try{
+    const result=await postJson(completed?'/api/attempt/complete':'/api/attempt/progress', payload);
+    if(result?.attempt_id && result.attempt_id!==user.attempt_id){
+      user.attempt_id=result.attempt_id;
+      saveUser(user);
+      console.debug('[capture] Server normalized attempt_id', result.attempt_id);
+    }
+    return {ok:true};
+  }catch(e){
+    console.warn('Server sync failed', e.message);
+    return {ok:false,error:e.message};
+  }
 }
 loadQuizVarNames();
-setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>touch(false));
+setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
+document.getElementById('completeBtn').onclick=async ()=>{
+  if(hasCompleted) return;
+  hasCompleted=true;
+  const result=await touch(true);
+  if(!result.ok){
+    hasCompleted=false;
+    alert(`Submission failed: ${result.error}. Check Vercel logs and environment variables, then try again.`);
+    return;
+  }
+  alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
+  location.href='index.html';
+};
 </script></body></html>
