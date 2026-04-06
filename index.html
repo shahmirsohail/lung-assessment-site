@@ -68,11 +68,24 @@ function upsertRecord(update){
   if(i<0){records.push(update)} else {records[i]={...records[i],...update}}
   saveRecords(records); render();
 }
+function formatCaptureDebug(debug){
+  if(!debug) return 'Not captured';
+  const parts=[];
+  parts.push(debug.player_found?'Player ✓':'Player ✗');
+  parts.push(`Vars: ${debug.quiz_var_count??0}`);
+  parts.push(`Responses: ${debug.interaction_count??0}`);
+  if(debug.last_error){parts.push(`Error: ${debug.last_error}`)}
+  if(debug.last_capture_at){parts.push(`At: ${debug.last_capture_at}`)}
+  return parts.join(' | ');
+}
 function render(){
   const r=loadRecords();
   if(!r.length){document.getElementById('records').innerHTML='<p>No local records yet.</p>'; return;}
-  let html='<table><tr><th>Name</th><th>Email</th><th>Attempt ID</th><th>Started</th><th>Completed</th><th>Minutes</th><th>Responses captured</th></tr>';
-  for(const x of r){html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.attempt_id||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td></tr>`}
+  let html='<table><tr><th>Name</th><th>Email</th><th>Attempt ID</th><th>Started</th><th>Completed</th><th>Minutes</th><th>Responses captured</th><th>Capture debug</th></tr>';
+  for(const x of r){
+    const debugText=formatCaptureDebug(x.capture_debug);
+    html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.attempt_id||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td><td title="${debugText.replaceAll('"','&quot;')}">${debugText}</td></tr>`
+  }
   html+='</table>'; document.getElementById('records').innerHTML=html;
 }
 function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}

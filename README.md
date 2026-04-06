@@ -16,6 +16,33 @@ This project wraps a Storyline package and now includes:
   - an internal results mailbox.
 - Provides internal admin dashboard to view attempts and resend emails.
 
+## Storyline response capture (stable user vars)
+
+To make response export deterministic, create explicit Storyline variables and populate them on submit actions:
+
+- `CapturedResponsesJson` (Text variable)
+- Optional status variables such as `LastAnsweredCaseId`, `LastAnsweredAt`, `AssessmentScore`, etc.
+
+Recommended JavaScript trigger pattern in Storyline (on question/case submit, or a centralized submit-all trigger):
+
+```js
+const player = GetPlayer();
+
+const payload = {
+  caseId: player.GetVar('CurrentCaseId') || null,
+  questionId: player.GetVar('CurrentQuestionId') || null,
+  selectedAnswer: player.GetVar('CurrentSelection') || null,
+  isCorrect: player.GetVar('CurrentIsCorrect') || null,
+  answeredAt: new Date().toISOString()
+};
+
+player.SetVar('CapturedResponsesJson', JSON.stringify(payload));
+player.SetVar('LastAnsweredCaseId', payload.caseId || '');
+player.SetVar('LastAnsweredAt', payload.answeredAt);
+```
+
+`course.html` now reads `CapturedResponsesJson` first, safely parses it, merges optional status variables, and only then applies legacy `CurrentQuiz_*` capture as a non-blocking fallback.
+
 ## Environment variables
 
 Copy `.env.example` and populate in your Vercel project settings:
@@ -58,3 +85,13 @@ Copy `.env.example` and populate in your Vercel project settings:
 - Local browser storage is still kept as a backup cache.
 - Server-side DB is now the source of truth.
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in client code.
+
+## Troubleshooting
+
+If clicking **Submit & send results** does not update Supabase or send email:
+
+1. Open browser dev tools and confirm `POST /api/attempt/complete` returns HTTP 200.
+2. Check Vercel Function logs for the failing endpoint.
+3. Verify all env vars are set exactly as listed in `.env.example`.
+4. If your Supabase service key is a newer non-JWT key format, set `SUPABASE_AUTH_BEARER` in Vercel to a JWT bearer token compatible with PostgREST.
+5. Confirm Resend sender (`RESEND_FROM_EMAIL`) is valid for your account/domain.

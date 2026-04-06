@@ -5,51 +5,83 @@
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 let quizVarNames=[];
 let hasCompleted=false;
+const STABLE_RESPONSE_VAR='CapturedResponsesJson';
+const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
-function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
-function generateLearnerId(){
-  if(window.crypto?.randomUUID){return window.crypto.randomUUID();}
-  return 'learner-'+Math.random().toString(36).slice(2)+Date.now().toString(36);
-}
-function ensureLearnerIdentity(){
-  const existingUser=loadUser();
-  if(existingUser.learner_id){return existingUser;}
-  const learner_id=generateLearnerId();
-  const updatedUser={...existingUser,learner_id};
-  saveUser(updatedUser);
-  const records=loadRecords();
-  let changed=false;
-  for(const record of records){
-    if(!record.learner_id){
-      record.learner_id=learner_id;
-      changed=true;
-    }
-  }
-  if(changed){saveRecords(records)}
-  return updatedUser;
-}
-function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.learner_id===update.learner_id && update.learner_id)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
-const user=ensureLearnerIdentity(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
-async function loadQuizVarNames(){
+function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
+const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
+async function loadAssessmentMetadata(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
     const txt=await res.text();
     quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
-  }catch(e){/* best-effort only */}
+    captureDebug.quiz_var_count=quizVarNames.length;
+    if(!quizVarNames.length){setCaptureError('metadata_no_quiz_vars')} else if(captureDebug.last_error==='metadata_parse_failed'){clearCaptureError()}
+  }catch(e){
+    setCaptureError('metadata_parse_failed', e);
+    quizVarNames=[];
+    captureDebug.quiz_var_count=0;
+  }
+}
+function safeParseJson(jsonText){
+  if(typeof jsonText!=='string') return null;
+  const trimmed=jsonText.trim();
+  if(!trimmed) return null;
+  try{
+    return JSON.parse(trimmed);
+  }catch(e){
+    console.warn('CapturedResponsesJson is not valid JSON', e.message);
+    return null;
+  }
 }
 function getAssessmentResponses(){
+  const responses={};
+  captureDebug.quiz_var_count=quizVarNames.length;
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
-    if(!player || !quizVarNames.length) return {};
+    if(!player) return {};
+
     const responses={};
-    for(const name of quizVarNames){
-      const value=player.GetVar(name);
-      if(value!=='' && value!==null && value!==undefined){responses[name]=value;}
+
+    const stablePayload=player.GetVar(STABLE_RESPONSE_VAR);
+    const parsedPayload=safeParseJson(stablePayload);
+    if(parsedPayload && typeof parsedPayload==='object' && !Array.isArray(parsedPayload)){
+      Object.assign(responses, parsedPayload);
+    } else if(Array.isArray(parsedPayload)){
+      responses.capturedResponses=parsedPayload;
     }
+
+    for(const statusVarName of OPTIONAL_STATUS_VARS){
+      const value=player.GetVar(statusVarName);
+      if(value!=='' && value!==null && value!==undefined){
+        responses[statusVarName]=value;
+      }
+    }
+
+    // Best-effort fallback for legacy Storyline projects that have not yet
+    // implemented CapturedResponsesJson writing triggers.
+    if(quizVarNames.length){
+      const fallbackResponses={};
+      for(const name of quizVarNames){
+        const value=player.GetVar(name);
+        if(value!=='' && value!==null && value!==undefined){
+          fallbackResponses[name]=value;
+        }
+      }
+      for(const [name, value] of Object.entries(fallbackResponses)){
+        if(!(name in responses)) responses[name]=value;
+      }
+    }
+
     return responses;
-  }catch(e){return {};}
+  }catch(e){
+    captureDebug.player_found=false;
+    captureDebug.interaction_count=0;
+    setCaptureError('capture_exception', e);
+    return responses;
+  }
 }
 async function postJson(url, body){
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -59,6 +91,9 @@ async function postJson(url, body){
 }
 function buildPayload(completed=false){
   const mins=Math.round((Date.now()-start)/60000);
+  const nowIso=new Date().toISOString();
+  const responses=getAssessmentResponses();
+  captureDebug.last_capture_at=nowIso;
   return {
     attempt_id:user.attempt_id,
     learner_id:user.learner_id||'',
@@ -66,9 +101,10 @@ function buildPayload(completed=false){
     email:user.email||'',
     started:true,
     completed,
-    last_opened_at:new Date().toISOString(),
+    last_opened_at:nowIso,
     minutes_spent:mins,
-    responses:getAssessmentResponses(),
+    responses,
+    capture_debug:{...captureDebug},
   };
 }
 async function touch(completed=false){
@@ -80,7 +116,7 @@ async function touch(completed=false){
     console.warn('Server sync failed', e.message);
   }
 }
-loadQuizVarNames();
+loadAssessmentMetadata();
 setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
 document.getElementById('completeBtn').onclick=async ()=>{
   if(hasCompleted) return;
