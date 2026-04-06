@@ -63,8 +63,12 @@ launchBtn.onclick=()=>{
   const now=new Date().toISOString();
   const u={name:nameInput.value.trim(),email:emailInput.value.trim()}; saveUser(u);
   upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
-  location.href='course.html';
+  const assessmentWindow=window.open('course.html','_blank');
+  if(!assessmentWindow){ location.href='course.html'; }
 }
-exportBtn.onclick=exportCSV; render();
+exportBtn.onclick=exportCSV;
+window.addEventListener('focus',render);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});
+render();
 </script>
 </body></html>
