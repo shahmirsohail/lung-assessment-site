@@ -3,20 +3,16 @@ const { getEnv } = require('./config');
 function supabaseBase() {
   const url = getEnv('SUPABASE_URL').replace(/\/$/, '');
   const key = getEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const explicitBearer = process.env.SUPABASE_AUTH_BEARER || '';
-  return { url, key, explicitBearer };
+  return { url, key };
 }
 
 async function supabaseFetch(path, opts = {}) {
-  const { url, key, explicitBearer } = supabaseBase();
-  const isJwtLike = key.split('.').length === 3;
-  const authBearer = explicitBearer || (isJwtLike ? key : '');
-  const authHeader = authBearer ? { Authorization: `Bearer ${authBearer}` } : {};
+  const { url, key } = supabaseBase();
   const res = await fetch(`${url}/rest/v1/${path}`, {
     ...opts,
     headers: {
       apikey: key,
-      ...authHeader,
+      Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
       ...(opts.headers || {}),
     },
@@ -52,34 +48,17 @@ async function listAttempts({ limit = 100, offset = 0, email = '' }) {
   return supabaseFetch(`attempts?${filters.join('&')}`);
 }
 
-async function getLatestAttemptByEmail(email) {
-  const safeEmail = String(email || '').trim().toLowerCase();
-  if (!safeEmail) return null;
-  const rows = await supabaseFetch(
-    `attempts?learner_email=eq.${encodeURIComponent(safeEmail)}&order=updated_at.desc&limit=1&select=*`
-  );
-  return rows?.[0] || null;
-}
-
 async function insertEmailLog(log) {
-  try {
-    await supabaseFetch('email_dispatch_log', {
-      method: 'POST',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify(log),
-    });
-    return true;
-  } catch (err) {
-    // Logging should never break the core learner flow.
-    console.error('Failed to insert email_dispatch_log row', err);
-    return false;
-  }
+  await supabaseFetch('email_dispatch_log', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify(log),
+  });
 }
 
 module.exports = {
   upsertAttempt,
   getAttemptById,
-  getLatestAttemptByEmail,
   listAttempts,
   insertEmailLog,
 };
