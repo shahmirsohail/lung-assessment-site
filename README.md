@@ -58,3 +58,13 @@ Copy `.env.example` and populate in your Vercel project settings:
 - Local browser storage is still kept as a backup cache.
 - Server-side DB is now the source of truth.
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in client code.
+
+## Troubleshooting
+
+If clicking **Submit & send results** does not update Supabase or send email:
+
+1. Open browser dev tools and confirm `POST /api/attempt/complete` returns HTTP 200.
+2. Check Vercel Function logs for the failing endpoint.
+3. Verify all env vars are set exactly as listed in `.env.example`.
+4. If your Supabase service key is a newer non-JWT key format, set `SUPABASE_AUTH_BEARER` in Vercel to a JWT bearer token compatible with PostgREST.
+5. Confirm Resend sender (`RESEND_FROM_EMAIL`) is valid for your account/domain.
