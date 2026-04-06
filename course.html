@@ -1,12 +1,57 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button onclick="location.href='index.html'">Back</button></div></header><iframe src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
 <script>
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
+let quizVarNames=[];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.email===update.email && update.email); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
-function touch(completed=false){const mins=Math.round((Date.now()-start)/60000); upsertRecord({...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed});}
-setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>touch(false));
+async function loadQuizVarNames(){
+  try{
+    const res=await fetch('module/html5/data/js/data.js');
+    const txt=await res.text();
+    quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
+  }catch(e){/* best-effort only */}
+}
+function getAssessmentResponses(){
+  try{
+    const frame=document.getElementById('assessmentFrame');
+    const player=frame?.contentWindow?.GetPlayer?.();
+    if(!player || !quizVarNames.length) return {};
+    const responses={};
+    for(const name of quizVarNames){
+      const value=player.GetVar(name);
+      responses[name]=value??'';
+    }
+    return responses;
+  }catch(e){return {};}
+}
+function touch(completed=false){
+  const mins=Math.round((Date.now()-start)/60000);
+  const responses=getAssessmentResponses();
+  upsertRecord({...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed, responses});
+}
+function saveAndReturnToDashboard(){
+  touch(true);
+  location.href='index.html';
+}
+function installSaveExitOverride(){
+  const frame=document.getElementById('assessmentFrame');
+  frame.addEventListener('load',()=>{
+    try{
+      const win=frame.contentWindow;
+      const wrappedClose=()=>saveAndReturnToDashboard();
+      win.close=wrappedClose;
+      if(win.top&&win.top!==win){win.top.close=wrappedClose;}
+    }catch(e){/* best-effort only */}
+  });
+}
+loadQuizVarNames();
+installSaveExitOverride();
+setInterval(()=>touch(false),5000);
+window.addEventListener('beforeunload',()=>touch(true));
+window.addEventListener('pagehide',()=>touch(true));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden') touch(false)});
 </script></body></html>
