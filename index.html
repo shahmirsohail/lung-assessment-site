@@ -41,17 +41,51 @@ function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
+function generateLearnerId(){
+  if(window.crypto?.randomUUID){return window.crypto.randomUUID();}
+  return 'learner-'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+}
+function ensureLearnerIdentity(){
+  const existingUser=loadUser();
+  if(existingUser.learner_id){return existingUser;}
+  const learner_id=generateLearnerId();
+  const updatedUser={...existingUser,learner_id};
+  saveUser(updatedUser);
+  const records=loadRecords();
+  let changed=false;
+  for(const record of records){
+    if(!record.learner_id){
+      record.learner_id=learner_id;
+      changed=true;
+    }
+  }
+  if(changed){saveRecords(records)}
+  return updatedUser;
+}
 function upsertRecord(update){
   let records=loadRecords();
-  let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email));
+  let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.learner_id===update.learner_id && update.learner_id));
   if(i<0){records.push(update)} else {records[i]={...records[i],...update}}
   saveRecords(records); render();
+}
+function formatCaptureDebug(debug){
+  if(!debug) return 'Not captured';
+  const parts=[];
+  parts.push(debug.player_found?'Player ✓':'Player ✗');
+  parts.push(`Vars: ${debug.quiz_var_count??0}`);
+  parts.push(`Responses: ${debug.interaction_count??0}`);
+  if(debug.last_error){parts.push(`Error: ${debug.last_error}`)}
+  if(debug.last_capture_at){parts.push(`At: ${debug.last_capture_at}`)}
+  return parts.join(' | ');
 }
 function render(){
   const r=loadRecords();
   if(!r.length){document.getElementById('records').innerHTML='<p>No local records yet.</p>'; return;}
-  let html='<table><tr><th>Name</th><th>Email</th><th>Attempt ID</th><th>Started</th><th>Completed</th><th>Minutes</th><th>Responses captured</th></tr>';
-  for(const x of r){html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.attempt_id||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td></tr>`}
+  let html='<table><tr><th>Name</th><th>Email</th><th>Attempt ID</th><th>Started</th><th>Completed</th><th>Minutes</th><th>Responses captured</th><th>Capture debug</th></tr>';
+  for(const x of r){
+    const debugText=formatCaptureDebug(x.capture_debug);
+    html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.attempt_id||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td><td title="${debugText.replaceAll('"','&quot;')}">${debugText}</td></tr>`
+  }
   html+='</table>'; document.getElementById('records').innerHTML=html;
 }
 function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}
@@ -68,28 +102,26 @@ async function postJson(url, body){
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
-const u=loadUser(); nameInput.value=u.name||''; emailInput.value=u.email||'';
+const identityUser=ensureLearnerIdentity();
+nameInput.value=identityUser.name||'';
+emailInput.value=identityUser.email||'';
 saveBtn.onclick=()=>{
-  const current=loadUser();
-  saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:current.attempt_id||''});
+  const currentUser=ensureLearnerIdentity();
+  saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:currentUser.attempt_id||'',learner_id:currentUser.learner_id});
   alert('Saved');
 }
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
-  const name=nameInput.value.trim();
-  const email=emailInput.value.trim().toLowerCase();
-  if(!email){alert('Please enter learner email'); return;}
-  const attempt_id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-  const payload={attempt_id,name,email,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false,responses:{}};
-  try{
-    await postJson('/api/attempt/start', payload);
-  }catch(err){
-    alert(`Warning: could not save to server (${err.message}). Local backup still saved.`);
-  }
-  saveUser({name,email,attempt_id});
-  upsertRecord(payload);
-  location.href='course.html';
+  const currentUser=ensureLearnerIdentity();
+  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
+  saveUser(u);
+  upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
+  const assessmentWindow=window.open('course.html','_blank');
+  if(!assessmentWindow){ location.href='course.html'; }
 }
-exportBtn.onclick=exportCSV; render();
+exportBtn.onclick=exportCSV;
+window.addEventListener('focus',render);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});
+render();
 </script>
 </body></html>
