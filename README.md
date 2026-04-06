@@ -96,3 +96,4 @@ If clicking **Submit & send results** does not update Supabase or send email:
 4. If your Supabase service key is a newer non-JWT key format, set `SUPABASE_AUTH_BEARER` in Vercel to a JWT bearer token compatible with PostgREST.
 5. Confirm Resend sender (`RESEND_FROM_EMAIL`) is valid for your account/domain.
 6. If you see `attempt_id is required`, return to `index.html`, save learner details, and relaunch assessment so a fresh attempt ID is created.
+7. If console shows old errors like `captureDebug` / `setCaptureError` undefined, force-refresh and confirm console prints `Loaded course.html version 2026-04-06-course-hotfix-1`.
