@@ -5,20 +5,8 @@
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 let quizVarNames=[];
 let hasCompleted=false;
-const MAX_DEBUG_ERROR_LENGTH=180;
-const captureDebug={
-  player_found:false,
-  quiz_var_count:0,
-  interaction_count:0,
-  last_capture_at:'',
-  last_error:''
-};
-function truncateError(value){return (value||'').toString().slice(0,MAX_DEBUG_ERROR_LENGTH)}
-function setCaptureError(marker, err){
-  const details=err?.message?`: ${err.message}`:'';
-  captureDebug.last_error=truncateError(`${marker}${details}`);
-}
-function clearCaptureError(){captureDebug.last_error=''}
+const STABLE_RESPONSE_VAR='CapturedResponsesJson';
+const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
@@ -36,38 +24,57 @@ async function loadAssessmentMetadata(){
     captureDebug.quiz_var_count=0;
   }
 }
+function safeParseJson(jsonText){
+  if(typeof jsonText!=='string') return null;
+  const trimmed=jsonText.trim();
+  if(!trimmed) return null;
+  try{
+    return JSON.parse(trimmed);
+  }catch(e){
+    console.warn('CapturedResponsesJson is not valid JSON', e.message);
+    return null;
+  }
+}
 function getAssessmentResponses(){
   const responses={};
   captureDebug.quiz_var_count=quizVarNames.length;
   try{
     const frame=document.getElementById('assessmentFrame');
-    const getPlayer=frame?.contentWindow?.GetPlayer;
-    if(typeof getPlayer!=='function'){
-      captureDebug.player_found=false;
-      captureDebug.interaction_count=0;
-      setCaptureError('getplayer_missing');
-      return responses;
+    const player=frame?.contentWindow?.GetPlayer?.();
+    if(!player) return {};
+
+    const responses={};
+
+    const stablePayload=player.GetVar(STABLE_RESPONSE_VAR);
+    const parsedPayload=safeParseJson(stablePayload);
+    if(parsedPayload && typeof parsedPayload==='object' && !Array.isArray(parsedPayload)){
+      Object.assign(responses, parsedPayload);
+    } else if(Array.isArray(parsedPayload)){
+      responses.capturedResponses=parsedPayload;
     }
-    const player=getPlayer();
-    if(!player || typeof player.GetVar!=='function'){
-      captureDebug.player_found=false;
-      captureDebug.interaction_count=0;
-      setCaptureError('player_unavailable');
-      return responses;
+
+    for(const statusVarName of OPTIONAL_STATUS_VARS){
+      const value=player.GetVar(statusVarName);
+      if(value!=='' && value!==null && value!==undefined){
+        responses[statusVarName]=value;
+      }
     }
-    captureDebug.player_found=true;
-    let undefinedReads=0;
-    for(const name of quizVarNames){
-      const value=player.GetVar(name);
-      if(value===undefined){undefinedReads++; continue;}
-      if(value!=='' && value!==null){responses[name]=value;}
+
+    // Best-effort fallback for legacy Storyline projects that have not yet
+    // implemented CapturedResponsesJson writing triggers.
+    if(quizVarNames.length){
+      const fallbackResponses={};
+      for(const name of quizVarNames){
+        const value=player.GetVar(name);
+        if(value!=='' && value!==null && value!==undefined){
+          fallbackResponses[name]=value;
+        }
+      }
+      for(const [name, value] of Object.entries(fallbackResponses)){
+        if(!(name in responses)) responses[name]=value;
+      }
     }
-    captureDebug.interaction_count=Object.keys(responses).length;
-    if(quizVarNames.length && undefinedReads===quizVarNames.length){
-      setCaptureError('all_reads_undefined');
-    }else if(captureDebug.last_error!=='metadata_parse_failed'){
-      clearCaptureError();
-    }
+
     return responses;
   }catch(e){
     captureDebug.player_found=false;
