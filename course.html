@@ -5,6 +5,8 @@
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 let quizVarNames=[];
 let hasCompleted=false;
+const STABLE_RESPONSE_VAR='CapturedResponsesJson';
+const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
@@ -16,16 +18,55 @@ async function loadQuizVarNames(){
     quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
   }catch(e){/* best-effort only */}
 }
+function safeParseJson(jsonText){
+  if(typeof jsonText!=='string') return null;
+  const trimmed=jsonText.trim();
+  if(!trimmed) return null;
+  try{
+    return JSON.parse(trimmed);
+  }catch(e){
+    console.warn('CapturedResponsesJson is not valid JSON', e.message);
+    return null;
+  }
+}
 function getAssessmentResponses(){
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
-    if(!player || !quizVarNames.length) return {};
+    if(!player) return {};
+
     const responses={};
-    for(const name of quizVarNames){
-      const value=player.GetVar(name);
-      if(value!=='' && value!==null && value!==undefined){responses[name]=value;}
+
+    const stablePayload=player.GetVar(STABLE_RESPONSE_VAR);
+    const parsedPayload=safeParseJson(stablePayload);
+    if(parsedPayload && typeof parsedPayload==='object' && !Array.isArray(parsedPayload)){
+      Object.assign(responses, parsedPayload);
+    } else if(Array.isArray(parsedPayload)){
+      responses.capturedResponses=parsedPayload;
     }
+
+    for(const statusVarName of OPTIONAL_STATUS_VARS){
+      const value=player.GetVar(statusVarName);
+      if(value!=='' && value!==null && value!==undefined){
+        responses[statusVarName]=value;
+      }
+    }
+
+    // Best-effort fallback for legacy Storyline projects that have not yet
+    // implemented CapturedResponsesJson writing triggers.
+    if(quizVarNames.length){
+      const fallbackResponses={};
+      for(const name of quizVarNames){
+        const value=player.GetVar(name);
+        if(value!=='' && value!==null && value!==undefined){
+          fallbackResponses[name]=value;
+        }
+      }
+      for(const [name, value] of Object.entries(fallbackResponses)){
+        if(!(name in responses)) responses[name]=value;
+      }
+    }
+
     return responses;
   }catch(e){return {};}
 }
