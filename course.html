@@ -1,12 +1,61 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button onclick="location.href='index.html'">Back</button></div></header><iframe src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
 <script>
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
+const DEFAULT_QUIZ_VAR_NAMES=["CurrentQuiz_5Vmbt8ncJj4","CurrentQuiz_5WWtcH0AG7U","CurrentQuiz_5WsYCWPr2Da","CurrentQuiz_5YbYFQbv0RC","CurrentQuiz_5ZOKBebxyW2","CurrentQuiz_5ZhF3VzFmTy","CurrentQuiz_5a0hSWY1JLA","CurrentQuiz_5aUyEqImMJ1","CurrentQuiz_5atfdCzOntK","CurrentQuiz_5btPwg5guc3","CurrentQuiz_5cUveeY2AZX","CurrentQuiz_5e9jomKlHfP","CurrentQuiz_5f08UagnTNW","CurrentQuiz_5gtOhNA1cgY","CurrentQuiz_5kQEh3hweNd","CurrentQuiz_5khAwQzVtQq","CurrentQuiz_5kpFVKROihy","CurrentQuiz_5l12aCMhVVo","CurrentQuiz_5oGE3DEqRiT","CurrentQuiz_5oxZ0ZFyHt8","CurrentQuiz_5s9nds7Vf6N","CurrentQuiz_5ubhpvHlHFI","CurrentQuiz_5x4OxX4Pa57","CurrentQuiz_5yK3VMbcDoy","CurrentQuiz_5yoCmTAHRxU","CurrentQuiz_5ytielWvUeW","CurrentQuiz_62EbC5qy4XU","CurrentQuiz_62h8oLr9tuL","CurrentQuiz_63ezaVdaYgd","CurrentQuiz_63ill7FKLkC","CurrentQuiz_652FLzQWU2K","CurrentQuiz_65gar2uXnMJ","CurrentQuiz_68KaeOSsnS6","CurrentQuiz_69qco2hy745","CurrentQuiz_6ANqTsqkXiv","CurrentQuiz_6BEhuqTyUXA","CurrentQuiz_6D6LXSB3Efo","CurrentQuiz_6Dqa9OU2g6X","CurrentQuiz_6EPyDpD5mOZ","CurrentQuiz_6GRN1pdRKtH","CurrentQuiz_6ITaNbR8Q8S","CurrentQuiz_6IqoREZRvog","CurrentQuiz_6LamQMvAESO","CurrentQuiz_6MCBHcqGdug","CurrentQuiz_6NcI9JoE86e","CurrentQuiz_6OVGNwcEofI","CurrentQuiz_6QMgd2h7blD","CurrentQuiz_6RdvYcXdmpF","CurrentQuiz_6SU5leVeQsi","CurrentQuiz_6TqcnbGsBTw","CurrentQuiz_6WKtFSF8KSC","CurrentQuiz_6byTt3CHQ1q","CurrentQuiz_6cCPym56kgG","CurrentQuiz_6ctKuAUWPDP","CurrentQuiz_6dlML8DG70T","CurrentQuiz_6ezkQYSpbNx","CurrentQuiz_6ghcilD1x5K","CurrentQuiz_6hnSEYrNI2v","CurrentQuiz_6hweffvG2uw","CurrentQuiz_6lo4G5D7ibC","CurrentQuiz_6m3ARHw6WtV","CurrentQuiz_6mFyc4p3YCs","CurrentQuiz_6n7oNdyUl7w","CurrentQuiz_6nS94DJ6CZC"];
+let quizVarNames=[...DEFAULT_QUIZ_VAR_NAMES];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.email===update.email && update.email); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
-function touch(completed=false){const mins=Math.round((Date.now()-start)/60000); upsertRecord({...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed});}
-setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>touch(false));
+async function loadQuizVarNames(){
+  try{
+    const res=await fetch('module/html5/data/js/data.js');
+    const txt=await res.text();
+    const discovered=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]) )];
+    if(discovered.length) quizVarNames=discovered;
+  }catch(e){/* best-effort only */}
+}
+function getAssessmentResponses(){
+  try{
+    const frame=document.getElementById('assessmentFrame');
+    const player=frame?.contentWindow?.GetPlayer?.();
+    if(!player || !quizVarNames.length) return {};
+    const responses={};
+    for(const name of quizVarNames){
+      const value=player.GetVar(name);
+      responses[name]=value??'';
+    }
+    return responses;
+  }catch(e){return {};}
+}
+function touch(completed=false){
+  const mins=Math.round((Date.now()-start)/60000);
+  const responses=getAssessmentResponses();
+  const update={...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed};
+  if(Object.keys(responses).length){update.responses=responses;}
+  upsertRecord(update);
+}
+function saveAndReturnToDashboard(){
+  touch(true);
+  location.href='index.html';
+}
+function installSaveExitOverride(){
+  const frame=document.getElementById('assessmentFrame');
+  frame.addEventListener('load',()=>{
+    try{
+      const win=frame.contentWindow;
+      const wrappedClose=()=>saveAndReturnToDashboard();
+      win.close=wrappedClose;
+      if(win.top&&win.top!==win){win.top.close=wrappedClose;}
+    }catch(e){/* best-effort only */}
+  });
+}
+loadQuizVarNames();
+installSaveExitOverride();
+setInterval(()=>touch(false),5000);
+window.addEventListener('beforeunload',()=>touch(true));
+window.addEventListener('pagehide',()=>touch(true));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden') touch(false)});
 </script></body></html>
