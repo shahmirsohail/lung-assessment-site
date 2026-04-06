@@ -17,12 +17,17 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
   <input id="email" placeholder="Learner email">
   <button id="saveBtn">Save learner</button>
   <button id="launchBtn">Launch assessment</button>
-  <p class="small">This version stores records only in the current browser, including captured quiz responses.</p>
+  <p class="small">This version saves records to your internal database and sends completion emails when submitted.</p>
 </div>
 <div class="card">
-  <h2>Local records</h2>
+  <h2>Local cache (backup only)</h2>
   <button id="exportBtn">Export CSV</button>
   <div id="records"></div>
+</div>
+<div class="card">
+  <h2>Internal admin</h2>
+  <p class="small">Use the internal dashboard to view all learner submissions.</p>
+  <button onclick="location.href='admin.html'">Open admin dashboard</button>
 </div>
 <script>
 const KEY='lungAssessmentLocalRecords';
@@ -38,28 +43,34 @@ function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function saveUser(u){localStorage.setItem(USER, JSON.stringify(u))}
 function upsertRecord(update){
   let records=loadRecords();
-  let i=records.findIndex(r=>r.email===update.email && update.email);
+  let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email));
   if(i<0){records.push(update)} else {records[i]={...records[i],...update}}
   saveRecords(records); render();
 }
 function render(){
   const r=loadRecords();
-  if(!r.length){document.getElementById('records').innerHTML='<p>No records yet.</p>'; return;}
-  let html='<table><tr><th>Name</th><th>Email</th><th>Started</th><th>Completed</th><th>Start</th><th>Last opened</th><th>Minutes</th><th>Responses captured</th></tr>';
-  for(const x of r){html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.started_at||''}</td><td>${x.last_opened_at||''}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td></tr>`}
+  if(!r.length){document.getElementById('records').innerHTML='<p>No local records yet.</p>'; return;}
+  let html='<table><tr><th>Name</th><th>Email</th><th>Attempt ID</th><th>Started</th><th>Completed</th><th>Minutes</th><th>Responses captured</th></tr>';
+  for(const x of r){html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.attempt_id||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td></tr>`}
   html+='</table>'; document.getElementById('records').innerHTML=html;
 }
 function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}
 function exportCSV(){
   const rows=loadRecords(); if(!rows.length) return;
-  const cols=['name','email','started','completed','started_at','last_opened_at','minutes_spent','responses'];
+  const cols=['name','email','attempt_id','started','completed','started_at','last_opened_at','minutes_spent','responses'];
   const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(c==='responses'?JSON.stringify(r[c]||{}):r[c])).join(','))).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
 }
+async function postJson(url, body){
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
+  if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
+  return data;
+}
 const u=loadUser(); nameInput.value=u.name||''; emailInput.value=u.email||'';
-saveBtn.onclick=()=>{saveUser({name:nameInput.value.trim(),email:emailInput.value.trim()}); alert('Saved')}
-launchBtn.onclick=()=>{
+saveBtn.onclick=()=>{saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:u.attempt_id||''}); alert('Saved')}
+launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
   const u={name:nameInput.value.trim(),email:emailInput.value.trim()}; saveUser(u);
   upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
