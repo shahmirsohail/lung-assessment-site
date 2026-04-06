@@ -1,87 +1,69 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button id="completeBtn">Submit & send results</button> <button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
 <script>
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 let quizVarNames=[];
-let interactionChoiceMap=[];
+let hasCompleted=false;
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
-function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.email===update.email && update.email); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
+function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
-function safeGetVar(player,name){try{return player.GetVar(name)}catch(e){return undefined}}
-async function loadAssessmentMetadata(){
+async function loadQuizVarNames(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
     const txt=await res.text();
-    let payload='';
-    new Function('window', txt)({globalProvideData:(key,val)=>{if(key==='data') payload=val;}});
-    if(!payload) return;
-    const data=JSON.parse(payload);
-    const discovered=(data.variables||[]).map(v=>v&&v.name).filter(name=>name&&name.startsWith('CurrentQuiz_'));
-    if(discovered.length) quizVarNames=[...new Set(discovered)];
-    interactionChoiceMap=[];
-    for(const scene of (data.scenes||[])){
-      for(const slide of (scene.slides||[])){
-        for(const interaction of (slide.interactions||[])){
-          const choices=(interaction.choices||[]).map(c=>({id:c.id,text:c.lmstext||c.id}));
-          if(choices.length){
-            interactionChoiceMap.push({id:interaction.id,prompt:interaction.lmstext||interaction.id,choices});
-          }
-        }
-      }
-    }
+    quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
   }catch(e){/* best-effort only */}
 }
 function getAssessmentResponses(){
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
-    if(!player) return {};
+    if(!player || !quizVarNames.length) return {};
     const responses={};
-    // First try quiz variables.
     for(const name of quizVarNames){
-      const value=safeGetVar(player,name);
-      if(value!==undefined && value!==null && value!=='') responses[name]=value;
-    }
-    // Fallback: derive selected choices from interaction choice flags.
-    for(const interaction of interactionChoiceMap){
-      const selected=[];
-      for(const choice of interaction.choices){
-        const checked=safeGetVar(player,`${choice.id}.#_checked`);
-        if(checked===true || checked===1 || checked==='true') selected.push(choice.text);
-      }
-      if(selected.length) responses[interaction.prompt]=selected;
+      const value=player.GetVar(name);
+      if(value!=='' && value!==null && value!==undefined){responses[name]=value;}
     }
     return responses;
   }catch(e){return {};}
 }
-function touch(completed=false){
+async function postJson(url, body){
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
+  if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
+  return data;
+}
+function buildPayload(completed=false){
   const mins=Math.round((Date.now()-start)/60000);
-  const responses=getAssessmentResponses();
-  const update={...user, started:true, last_opened_at:new Date().toISOString(), minutes_spent:mins, completed:completed};
-  if(Object.keys(responses).length){update.responses=responses;}
-  upsertRecord(update);
+  return {
+    attempt_id:user.attempt_id,
+    name:user.name||'',
+    email:user.email||'',
+    started:true,
+    completed,
+    last_opened_at:new Date().toISOString(),
+    minutes_spent:mins,
+    responses:getAssessmentResponses(),
+  };
 }
-function saveAndReturnToDashboard(){
-  touch(true);
+async function touch(completed=false){
+  const payload=buildPayload(completed);
+  upsertRecord(payload);
+  try{
+    await postJson(completed?'/api/attempt/complete':'/api/attempt/progress', payload);
+  }catch(e){
+    console.warn('Server sync failed', e.message);
+  }
+}
+loadQuizVarNames();
+setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
+document.getElementById('completeBtn').onclick=async ()=>{
+  if(hasCompleted) return;
+  hasCompleted=true;
+  await touch(true);
+  alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
   location.href='index.html';
-}
-function installSaveExitOverride(){
-  const frame=document.getElementById('assessmentFrame');
-  frame.addEventListener('load',()=>{
-    try{
-      const win=frame.contentWindow;
-      const wrappedClose=()=>saveAndReturnToDashboard();
-      win.close=wrappedClose;
-      if(win.top&&win.top!==win){win.top.close=wrappedClose;}
-    }catch(e){/* best-effort only */}
-  });
-}
-loadAssessmentMetadata();
-installSaveExitOverride();
-setInterval(()=>touch(false),5000);
-window.addEventListener('beforeunload',()=>touch(true));
-window.addEventListener('pagehide',()=>touch(true));
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden') touch(false)});
+};
 </script></body></html>
