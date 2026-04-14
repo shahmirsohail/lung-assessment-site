@@ -1,17 +1,42 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button id="completeBtn">Submit & send results</button> <button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button id="completeBtn">Submit & send results</button> <button id="backBtn">Back</button></div></header><iframe id="assessmentFrame"></iframe>
 <script>
 const APP_VERSION='2026-04-06-course-hotfix-1';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
+const SHARE_QUERY=window.location.search||'';
+function shareUrl(url){
+  if(!SHARE_QUERY) return url;
+  const token=SHARE_QUERY.replace(/^\?/,'');
+  const joiner=url.includes('?')?'&':'?';
+  return `${url}${joiner}${token}`;
+}
 let quizVarNames=[];
 let hasCompleted=false;
+const captureDebug={
+  player_found:false,
+  quiz_var_count:0,
+  interaction_count:0,
+  last_error:'',
+  last_capture_at:'',
+  last_error_detail:''
+};
 const STABLE_RESPONSE_VAR='CapturedResponsesJson';
 const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
+function setCaptureError(code, err){
+  captureDebug.last_error=String(code||'capture_error');
+  captureDebug.last_error_detail=err?String(err.message||err):'';
+}
+function clearCaptureError(){
+  captureDebug.last_error='';
+  captureDebug.last_error_detail='';
+}
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
+document.getElementById('assessmentFrame').src=shareUrl('module/story.html');
+document.getElementById('backBtn').onclick=()=>{location.href=shareUrl('index.html')};
 async function loadAssessmentMetadata(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
@@ -42,7 +67,12 @@ function getAssessmentResponses(){
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
-    if(!player) return {};
+    if(!player){
+      captureDebug.player_found=false;
+      captureDebug.interaction_count=0;
+      return {};
+    }
+    captureDebug.player_found=true;
 
     const responses={};
 
@@ -76,6 +106,7 @@ function getAssessmentResponses(){
       }
     }
 
+    captureDebug.interaction_count=Object.keys(responses).length;
     return responses;
   }catch(e){
     captureDebug.player_found=false;
@@ -85,7 +116,7 @@ function getAssessmentResponses(){
   }
 }
 async function postJson(url, body){
-  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch(shareUrl(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
@@ -93,6 +124,7 @@ async function postJson(url, body){
 function buildPayload(completed=false){
   const mins=Math.round((Date.now()-start)/60000);
   const nowIso=new Date().toISOString();
+  if(!user.attempt_id){throw new Error('Missing attempt_id. Return to index and relaunch assessment.')}
   const responses=getAssessmentResponses();
   captureDebug.last_capture_at=nowIso;
   return {
@@ -115,15 +147,21 @@ async function touch(completed=false){
     await postJson(completed?'/api/attempt/complete':'/api/attempt/progress', payload);
   }catch(e){
     console.warn('Server sync failed', e.message);
+    if(completed) throw e;
   }
 }
 loadAssessmentMetadata();
 setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
 document.getElementById('completeBtn').onclick=async ()=>{
   if(hasCompleted) return;
-  hasCompleted=true;
-  await touch(true);
-  alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
-  location.href='index.html';
+  try{
+    hasCompleted=true;
+    await touch(true);
+    alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
+    location.href=shareUrl('index.html');
+  }catch(e){
+    hasCompleted=false;
+    alert(`Submission failed: ${e.message}`);
+  }
 };
 </script></body></html>

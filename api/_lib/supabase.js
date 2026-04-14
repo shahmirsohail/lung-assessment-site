@@ -3,16 +3,17 @@ const { getEnv } = require('./config');
 function supabaseBase() {
   const url = getEnv('SUPABASE_URL').replace(/\/$/, '');
   const key = getEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return { url, key };
+  const bearer = process.env.SUPABASE_AUTH_BEARER || key;
+  return { url, key, bearer };
 }
 
 async function supabaseFetch(path, opts = {}) {
-  const { url, key } = supabaseBase();
+  const { url, key, bearer } = supabaseBase();
   const res = await fetch(`${url}/rest/v1/${path}`, {
     ...opts,
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${bearer}`,
       'Content-Type': 'application/json',
       ...(opts.headers || {}),
     },

@@ -16,7 +16,7 @@ pre{white-space:pre-wrap;word-wrap:break-word;max-height:180px;overflow:auto}
   <label>Admin token <input id="token" type="password" placeholder="Enter ADMIN_DASHBOARD_TOKEN"></label>
   <label>Filter by learner email <input id="emailFilter" placeholder="optional@domain.com"></label>
   <button id="loadBtn">Load attempts</button>
-  <button onclick="location.href='index.html'">Back to learner page</button>
+  <button id="backBtn">Back to learner page</button>
   <p class="small">Tip: token is never stored server-side; this page keeps it in browser memory only.</p>
 </div>
 <div class="card">
@@ -29,6 +29,13 @@ const tokenInput=document.getElementById('token');
 const emailFilter=document.getElementById('emailFilter');
 const statusEl=document.getElementById('status');
 const tableEl=document.getElementById('table');
+const SHARE_QUERY=window.location.search||'';
+function shareUrl(url){
+  if(!SHARE_QUERY) return url;
+  const token=SHARE_QUERY.replace(/^\?/,'');
+  const joiner=url.includes('?')?'&':'?';
+  return `${url}${joiner}${token}`;
+}
 
 async function loadAttempts(){
   const token=tokenInput.value.trim();
@@ -38,7 +45,7 @@ async function loadAttempts(){
   statusEl.textContent='Loading...';
   tableEl.innerHTML='';
 
-  const res=await fetch(`/api/admin/attempts${q}`,{headers:{'x-admin-token':token}});
+  const res=await fetch(shareUrl(`/api/admin/attempts${q}`),{headers:{'x-admin-token':token}});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid response'}));
   if(!res.ok || !data.ok){statusEl.textContent=`Error: ${data.error||'Request failed'}`; return;}
 
@@ -67,7 +74,7 @@ async function loadAttempts(){
 async function resend(attemptId,target){
   const token=tokenInput.value.trim();
   if(!token){alert('Admin token required');return;}
-  const res=await fetch('/api/admin/resend',{
+  const res=await fetch(shareUrl('/api/admin/resend'),{
     method:'POST',
     headers:{'Content-Type':'application/json','x-admin-token':token},
     body:JSON.stringify({attempt_id:attemptId,target})
@@ -78,5 +85,6 @@ async function resend(attemptId,target){
 }
 
 document.getElementById('loadBtn').onclick=loadAttempts;
+document.getElementById('backBtn').onclick=()=>{location.href=shareUrl('index.html')};
 </script>
 </body></html>
