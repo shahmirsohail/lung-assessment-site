@@ -36,21 +36,6 @@ function loadRetryQueue(){return JSON.parse(localStorage.getItem(RETRY_QUEUE_KEY
 function saveRetryQueue(queue){localStorage.setItem(RETRY_QUEUE_KEY, JSON.stringify(queue))}
 function enqueueRetry(item){const queue=loadRetryQueue(); queue.push(item); saveRetryQueue(queue)}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
-function setCaptureError(code, err){
-  captureDebug.last_error=String(code||'capture_error');
-  captureDebug.last_error_detail=err?String(err.message||err):'';
-}
-function clearCaptureError(){
-  captureDebug.last_error='';
-  captureDebug.last_error_detail='';
-}
-function withShare(url){
-  if(!SHARE_QUERY) return url;
-  const token=SHARE_QUERY.replace(/^\?/,'');
-  if(!token) return url;
-  const joiner=url.includes('?')?'&':'?';
-  return `${url}${joiner}${token}`;
-}
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
 function setSyncStatus(state){
   const el=document.getElementById('syncStatus');

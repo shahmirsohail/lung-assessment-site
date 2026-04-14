@@ -45,7 +45,6 @@ const SHARE_QUERY=window.location.search||'';
 function withShare(url){
   if(!SHARE_QUERY) return url;
   const token=SHARE_QUERY.replace(/^\?/,'');
-  if(!token) return url;
   const joiner=url.includes('?')?'&':'?';
   return `${url}${joiner}${token}`;
 }
