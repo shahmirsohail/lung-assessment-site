@@ -25,8 +25,10 @@ async function supabaseFetch(path, opts = {}) {
   }
 
   if (res.status === 204 || res.status === 201) return null;
+  const text = await res.text();
+  if (!text) return null;
   try {
-    return await res.json();
+    return JSON.parse(text);
   } catch (e) {
     throw new Error(`Supabase response parse failed (${res.status}): ${e.message}`);
   }
