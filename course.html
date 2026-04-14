@@ -130,7 +130,7 @@ function getAssessmentResponses(){
   }
 }
 async function postJson(url, body){
-  const res=await fetch(withShare(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
