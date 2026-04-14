@@ -102,7 +102,7 @@ function render(){
 function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}
 function exportCSV(){
   const rows=loadRecords(); if(!rows.length) return;
-  const responseKeys=[...new Set(rows.flatMap(r=>Object.keys(r.responses||{})))].sort();
+  const responseKeys=[...new Set(rows.flatMap(r=>Object.keys(r.responses||{})))].filter(k=>!/^Slider\d+$/.test(k)).sort();
   const baseCols=['name','email','attempt_id','started','completed','started_at','last_opened_at','minutes_spent'];
   const allCols=[...baseCols,...responseKeys];
   const csv=[allCols.join(',')].concat(rows.map(r=>{

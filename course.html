@@ -1,74 +1,86 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}.right{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}#syncStatus{font-size:13px;font-weight:600;padding:5px 8px;border-radius:999px;background:#e8f3ff;color:#0b4d8c}#syncStatus.pending{background:#fff3cd;color:#825200}#syncStatus.failed{background:#f8d7da;color:#842029}.blocking-error{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:9999}.blocking-error.show{display:flex}.blocking-error .panel{max-width:520px;background:#fff;border-radius:8px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.25)}.blocking-error h2{margin:0 0 12px;font-size:20px}.blocking-error p{margin:0 0 14px;line-height:1.4}.blocking-error .actions{display:flex;gap:10px;justify-content:flex-end}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div class="right"><span id="syncStatus">Synced</span><button id="completeBtn">Submit & send results</button> <button onclick="location.href=withShare('index.html')">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div class="right"><span id="syncStatus">Synced</span><button id="completeBtn">Submit & send results</button> <button onclick="location.href=withShare('index.html')">Back</button></div></header><iframe id="assessmentFrame" src="module/index_lms.html"></iframe>
 <div id="blockingError" class="blocking-error" role="alertdialog" aria-modal="true" aria-labelledby="blockingErrorTitle"><div class="panel"><h2 id="blockingErrorTitle">Could not submit assessment</h2><p id="blockingErrorText">We could not sync your completion with the server. Please check your connection and retry. You will not be redirected until this succeeds.</p><div class="actions"><button id="blockingRetryBtn">Retry now</button></div></div></div>
 <script>
-const APP_VERSION='2026-04-06-course-hotfix-1';
+const APP_VERSION='2026-04-14-lms-scorm';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 const RETRY_QUEUE_KEY='lungAssessmentRetryQueue';
 const SHARE_QUERY=window.location.search||'';
 function withShare(url){if(!SHARE_QUERY) return url; const token=SHARE_QUERY.replace(/^\?/,''); const joiner=url.includes('?')?'&':'?'; return `${url}${joiner}${token}`;}
-let quizVarNames=[];
-let hasCompleted=false;
-let retryInFlight=false;
-const STABLE_RESPONSE_VAR='CapturedResponsesJson';
+let hasCompleted=false; let retryInFlight=false;
+// SCORM 1.2 API stub — index_lms.html loads scormdriver.js which scans window.parent for window.API.
+// All LMSSetValue calls (including cmi.interactions.N.student_response) are captured here.
+const scormData={};
+window.API={
+  LMSInitialize:()=>'true',
+  LMSFinish:()=>'true',
+  LMSCommit:()=>'true',
+  LMSGetLastError:()=>'0',
+  LMSGetErrorString:()=>'',
+  LMSGetDiagnostic:()=>'',
+  LMSGetValue:(el)=>scormData[el]||'',
+  LMSSetValue:(el,val)=>{scormData[el]=val; return 'true';},
+};
 const OPTIONAL_STATUS_VARS=['Visited','LastSlideViewed_6131NtijqTH'];
+// Maps SCORM interaction IDs (as set by scormdriver.js) to human-readable case/question labels.
+// Interaction IDs are the bare quiz-variable IDs Storyline uses internally.
 const CASE_SLIDE_MAP={
-  "5c8hcz1Vu7s":{c:"Intro",q:"Quadrants"},
-  "69lVJT1f0QB":{c:"Case 1",q:"Primary Pathology"},
-  "5dJy4aYxSDa":{c:"Case 1",q:"Secondary Pathology"},
-  "6CjmNVS7dAB":{c:"Case 2",q:"Primary Pathology"},
-  "6Wf8z7Tn6h3":{c:"Case 2",q:"Secondary Pathology"},
-  "67XJTnlJLdm":{c:"Case 3",q:"Primary Pathology"},
-  "6pkJEWER6V8":{c:"Case 3",q:"Secondary Pathology"},
-  "5ekAqFqSQ6j":{c:"Case 3",q:"Confidence Level"},
-  "63Tub0CMiyi":{c:"Case 4",q:"Normal or Abnormal"},
-  "65SwsELJ2FZ":{c:"Case 4",q:"Primary Pathology"},
-  "5eDBBzCzXUY":{c:"Case 4",q:"Secondary Pathology"},
-  "5dmHQMKvURG":{c:"Case 5",q:"Normal or Abnormal"},
-  "6lT67FBHJaP":{c:"Case 5",q:"Primary Pathology"},
-  "6NJDylTYzfm":{c:"Case 5",q:"Secondary Pathology"},
-  "5sjsYvnI4ND":{c:"Case 5",q:"Confidence Level"},
-  "5WnoxU420tv":{c:"Case 6",q:"Primary Pathology"},
-  "6BJNTtFq1bW":{c:"Case 6",q:"Secondary Pathology"},
-  "5gLDTY263PC":{c:"Case 7",q:"Normal or Abnormal"},
-  "6Zi77SBFnNc":{c:"Case 7",q:"Primary Pathology"},
-  "6blq9AKhfTs":{c:"Case 7",q:"Secondary Pathology"},
-  "69KCQTSNhwB":{c:"Case 8",q:"Normal or Abnormal"},
-  "6Co9whtlpSP":{c:"Case 8",q:"Primary Pathology"},
-  "5t3redaWdm9":{c:"Case 8",q:"Secondary Pathology"},
-  "6MrUAi6ugfV":{c:"Case 9",q:"Primary Pathology"},
-  "6FnPOeyPW5U":{c:"Case 9",q:"Secondary Pathology"},
-  "5yiBdeoVNKk":{c:"Case 10",q:"Normal or Abnormal"},
-  "68gExR3Bkgs":{c:"Case 10",q:"Primary Pathology"},
-  "5V098HWA8ek":{c:"Case 10",q:"Secondary Pathology"},
-  "6Cl7MUbEhFR":{c:"Case 10",q:"Confidence Level"},
-  "5es0zacRKUu":{c:"Case 11",q:"Normal or Abnormal"},
-  "5o5uQiLCyuZ":{c:"Case 11",q:"Primary Pathology"},
-  "6cjohDIo3EL":{c:"Case 11",q:"Secondary Pathology"},
-  "5uO28ZT8JmY":{c:"Case 11",q:"Confidence Level"},
-  "6oXgbMJPlSD":{c:"Case 12",q:"Primary Pathology"},
-  "5buOyermflr":{c:"Case 12",q:"Secondary Pathology"},
-  "6ADrbVRsZTz":{c:"Case 13",q:"Normal or Abnormal"},
-  "5y49wWowd4C":{c:"Case 13",q:"Primary Pathology"},
-  "5aoyItdpB70":{c:"Case 13",q:"Secondary Pathology"},
-  "5c0upnqD5FS":{c:"Case 13",q:"Confidence Level"},
-  "5wHCjfLD8Yv":{c:"Case 14",q:"Primary Pathology"},
-  "62gmvQeEJTe":{c:"Case 14",q:"Secondary Pathology"},
-  "5iAG4JPatH3":{c:"Case 14",q:"Confidence Level"},
-  "5b9RInqtc9W":{c:"Case 15",q:"Normal or Abnormal"},
-  "6Ro9YHFnfxv":{c:"Case 15",q:"Primary Pathology"},
-  "6JnjXavlY2Q":{c:"Case 15",q:"Secondary Pathology"},
-  "62pqJBdqqhI":{c:"Case 15",q:"Confidence Level"},
-  "5nZjNiZcj9J":{c:"Case 16",q:"Normal or Abnormal"},
-  "5ghCgSIHT6w":{c:"Case 16",q:"Primary Pathology"},
-  "6G5WSRfzWy1":{c:"Case 16",q:"Secondary Pathology"},
-  "5oxcmhuC8Zb":{c:"Case 16",q:"Confidence Level"},
+  "6SU5leVeQsi":{c:"Case 1",q:"Primary Pathology"},
+  "65gar2uXnMJ":{c:"Case 1",q:"Secondary Pathology"},
+  "5ZOKBebxyW2":{c:"Case 2",q:"Primary Pathology"},
+  "5kpFVKROihy":{c:"Case 2",q:"Secondary Pathology"},
+  "5oxZ0ZFyHt8":{c:"Case 3",q:"Primary Pathology"},
+  "6EPyDpD5mOZ":{c:"Case 3",q:"Secondary Pathology"},
+  "6ezkQYSpbNx":{c:"Case 3",q:"Confidence Level"},
+  "6hweffvG2uw":{c:"Case 4",q:"Normal or Abnormal"},
+  "5oGE3DEqRiT":{c:"Case 4",q:"Primary Pathology"},
+  "6ghcilD1x5K":{c:"Case 4",q:"Secondary Pathology"},
+  "6n7oNdyUl7w":{c:"Case 5",q:"Normal or Abnormal"},
+  "5l12aCMhVVo":{c:"Case 5",q:"Primary Pathology"},
+  "6OVGNwcEofI":{c:"Case 5",q:"Secondary Pathology"},
+  "6NcI9JoE86e":{c:"Case 5",q:"Confidence Level"},
+  "5cUveeY2AZX":{c:"Case 6",q:"Primary Pathology"},
+  "6m3ARHw6WtV":{c:"Case 6",q:"Secondary Pathology"},
+  "6ITaNbR8Q8S":{c:"Case 7",q:"Normal or Abnormal"},
+  "5khAwQzVtQq":{c:"Case 7",q:"Primary Pathology"},
+  "6mFyc4p3YCs":{c:"Case 7",q:"Secondary Pathology"},
+  "5ubhpvHlHFI":{c:"Case 8",q:"Normal or Abnormal"},
+  "6nS94DJ6CZC":{c:"Case 8",q:"Primary Pathology"},
+  "6lo4G5D7ibC":{c:"Case 8",q:"Secondary Pathology"},
+  "5kQEh3hweNd":{c:"Case 9",q:"Primary Pathology"},
+  "6TqcnbGsBTw":{c:"Case 9",q:"Secondary Pathology"},
+  "6Dqa9OU2g6X":{c:"Case 10",q:"Normal or Abnormal"},
+  "5WsYCWPr2Da":{c:"Case 10",q:"Primary Pathology"},
+  "6BEhuqTyUXA":{c:"Case 10",q:"Secondary Pathology"},
+  "5x4OxX4Pa57":{c:"Case 10",q:"Confidence Level"},
+  "6WKtFSF8KSC":{c:"Case 11",q:"Normal or Abnormal"},
+  "5WWtcH0AG7U":{c:"Case 11",q:"Primary Pathology"},
+  "5a0hSWY1JLA":{c:"Case 11",q:"Secondary Pathology"},
+  "5aUyEqImMJ1":{c:"Case 11",q:"Confidence Level"},
+  "5yoCmTAHRxU":{c:"Case 12",q:"Primary Pathology"},
+  "5s9nds7Vf6N":{c:"Case 12",q:"Secondary Pathology"},
+  "652FLzQWU2K":{c:"Case 13",q:"Normal or Abnormal"},
+  "6QMgd2h7blD":{c:"Case 13",q:"Primary Pathology"},
+  "5Vmbt8ncJj4":{c:"Case 13",q:"Secondary Pathology"},
+  "6ANqTsqkXiv":{c:"Case 13",q:"Confidence Level"},
+  "6LamQMvAESO":{c:"Case 14",q:"Primary Pathology"},
+  "6GRN1pdRKtH":{c:"Case 14",q:"Secondary Pathology"},
+  "6cCPym56kgG":{c:"Case 14",q:"Confidence Level"},
+  "5btPwg5guc3":{c:"Case 15",q:"Normal or Abnormal"},
+  "5atfdCzOntK":{c:"Case 15",q:"Primary Pathology"},
+  "63ezaVdaYgd":{c:"Case 15",q:"Secondary Pathology"},
+  "6RdvYcXdmpF":{c:"Case 15",q:"Confidence Level"},
+  "5gtOhNA1cgY":{c:"Case 16",q:"Normal or Abnormal"},
+  "6hnSEYrNI2v":{c:"Case 16",q:"Primary Pathology"},
+  "62EbC5qy4XU":{c:"Case 16",q:"Secondary Pathology"},
+  "63ill7FKLkC":{c:"Case 16",q:"Confidence Level"},
 };
 function transformResponseKeys(raw){
   const out={};
   for(const [k,v] of Object.entries(raw)){
-    const m=k.match(/^CurrentQuiz_([A-Za-z0-9]+)$/);
+    // Match bare ID or CurrentQuiz_<ID> format (Storyline may use either in interaction IDs)
+    const m=k.match(/^(?:CurrentQuiz_)?([A-Za-z0-9]+)$/);
     if(m){const map=CASE_SLIDE_MAP[m[1]]; if(map){out[`${map.c} - ${map.q}`]=v; continue;}}
     out[k]=v;
   }
@@ -112,88 +124,42 @@ function showBlockingError(message){
   document.getElementById('blockingError').classList.add('show');
 }
 function hideBlockingError(){document.getElementById('blockingError').classList.remove('show')}
-async function loadAssessmentMetadata(){
-  try{
-    const res=await fetch('module/html5/data/js/data.js');
-    const txt=await res.text();
-    quizVarNames=[...new Set([
-      ...(txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]),
-      ...(txt.match(/Slider\d+/g)||[]),
-    ])];
-    captureDebug.quiz_var_count=quizVarNames.length;
-    if(!quizVarNames.length){setCaptureError('metadata_no_quiz_vars')} else if(captureDebug.last_error?.code==='metadata_parse_failed'){clearCaptureError()}
-  }catch(e){
-    setCaptureError('metadata_parse_failed', e);
-    quizVarNames=[];
-    captureDebug.quiz_var_count=0;
-  }
-}
-function safeParseJson(jsonText){
-  if(typeof jsonText!=='string') return null;
-  const trimmed=jsonText.trim();
-  if(!trimmed) return null;
-  try{
-    return JSON.parse(trimmed);
-  }catch(e){
-    console.warn('CapturedResponsesJson is not valid JSON', e.message);
-    return null;
-  }
-}
 function getAssessmentResponses(){
   const responses={};
-  captureDebug.quiz_var_count=quizVarNames.length;
+  try{
+    // Primary source: SCORM 1.2 interactions captured via window.API above.
+    // scormdriver.js sets cmi.interactions.N.id (question ID) and
+    // cmi.interactions.N.student_response (the student's selected answer text).
+    const count=parseInt(scormData['cmi.interactions._count']||'0',10);
+    captureDebug.quiz_var_count=count;
+    for(let i=0;i<count;i++){
+      const id=scormData[`cmi.interactions.${i}.id`]||'';
+      const resp=scormData[`cmi.interactions.${i}.student_response`];
+      if(id && resp!==undefined && resp!==''){
+        // id may arrive as "CurrentQuiz_6SU5leVeQsi" or just "6SU5leVeQsi"
+        responses[id]=resp;
+      }
+    }
+  }catch(e){
+    setCaptureError('scorm_capture_exception',e);
+  }
+  // Supplement with Storyline GetVar for status/optional vars
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
-    if(!player){
-      captureDebug.player_found=false;
-      captureDebug.interaction_count=0;
-      setCaptureError('player_unavailable');
-      return responses;
-    }
-    captureDebug.player_found=true;
-
-    const stablePayload=player.GetVar(STABLE_RESPONSE_VAR);
-    const parsedPayload=safeParseJson(stablePayload);
-    if(parsedPayload && typeof parsedPayload==='object' && !Array.isArray(parsedPayload)){
-      Object.assign(responses, parsedPayload);
-    } else if(Array.isArray(parsedPayload)){
-      responses.capturedResponses=parsedPayload;
-    }
-
-    for(const statusVarName of OPTIONAL_STATUS_VARS){
-      const value=player.GetVar(statusVarName);
-      if(value!=='' && value!==null && value!==undefined){
-        responses[statusVarName]=value;
+    captureDebug.player_found=Boolean(player);
+    if(player){
+      for(const varName of OPTIONAL_STATUS_VARS){
+        const val=player.GetVar(varName);
+        if(val!==''&&val!==null&&val!==undefined) responses[varName]=val;
       }
+      if(captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
     }
-
-    // Best-effort fallback for legacy Storyline projects that have not yet
-    // implemented CapturedResponsesJson writing triggers.
-    if(quizVarNames.length){
-      const fallbackResponses={};
-      for(const name of quizVarNames){
-        const value=player.GetVar(name);
-        if(value!=='' && value!==null && value!==undefined){
-          fallbackResponses[name]=value;
-        }
-      }
-      for(const [name, value] of Object.entries(fallbackResponses)){
-        if(!(name in responses)) responses[name]=value;
-      }
-    }
-    const transformed=transformResponseKeys(responses);
-    captureDebug.interaction_count=Object.keys(transformed).length;
-    if(captureDebug.last_error?.code==='player_unavailable' || captureDebug.last_error?.code==='capture_exception'){
-      clearCaptureError();
-    }
-    return transformed;
-  }catch(e){
-    captureDebug.player_found=false;
-    captureDebug.interaction_count=0;
-    setCaptureError('capture_exception', e);
-    return responses;
-  }
+  }catch(e){setCaptureError('player_exception',e);}
+  const transformed=transformResponseKeys(responses);
+  captureDebug.interaction_count=Object.keys(transformed).length;
+  captureDebug.last_capture_at=new Date().toISOString();
+  return transformed;
 }
 async function postJson(url, body){
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -254,7 +220,6 @@ async function flushRetryQueue(){
   retryInFlight=false;
   setSyncStatus(remaining.length?'failed':'synced');
 }
-loadAssessmentMetadata();
 setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
 setInterval(flushRetryQueue,45000);
 window.addEventListener('focus', flushRetryQueue);
