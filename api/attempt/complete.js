@@ -3,6 +3,10 @@ const { buildAttemptPayload } = require('../_lib/attempt');
 const { upsertAttempt, getAttemptById, insertEmailLog } = require('../_lib/supabase');
 const { sendResendEmail, buildSummaryHtml } = require('../_lib/email');
 
+async function safeInsertEmailLog(log) {
+  try { await insertEmailLog(log); } catch { /* never let logging failures block submission */ }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
 
@@ -29,7 +33,7 @@ module.exports = async (req, res) => {
           subject: 'Your Lung Ultrasound Assessment results',
           html: summaryHtml,
         });
-        await insertEmailLog({
+        await safeInsertEmailLog({
           attempt_id: merged.attempt_id,
           recipient: merged.learner_email,
           template: 'learner_summary',
@@ -39,7 +43,7 @@ module.exports = async (req, res) => {
         });
         merged.completion_email_sent_at = nowIso();
       } catch (emailErr) {
-        await insertEmailLog({
+        await safeInsertEmailLog({
           attempt_id: merged.attempt_id,
           recipient: merged.learner_email,
           template: 'learner_summary',
@@ -57,7 +61,7 @@ module.exports = async (req, res) => {
           subject: `Assessment completed: ${merged.learner_name || merged.learner_email}`,
           html: summaryHtml,
         });
-        await insertEmailLog({
+        await safeInsertEmailLog({
           attempt_id: merged.attempt_id,
           recipient: adminEmail,
           template: 'internal_summary',
@@ -67,7 +71,7 @@ module.exports = async (req, res) => {
         });
         merged.admin_email_sent_at = nowIso();
       } catch (emailErr) {
-        await insertEmailLog({
+        await safeInsertEmailLog({
           attempt_id: merged.attempt_id,
           recipient: adminEmail,
           template: 'internal_summary',
