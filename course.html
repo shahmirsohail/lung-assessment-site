@@ -163,12 +163,12 @@ async function touch(completed=false){
   try{
     await postJson(url, payload);
     setSyncStatus('synced');
-    return true;
+    return {ok:true};
   }catch(e){
     console.warn('Server sync failed', e.message);
     setSyncStatus('failed');
     enqueueRetry({url, payload, failed_at:new Date().toISOString()});
-    return false;
+    return {ok:false, error:e.message||'Unknown error'};
   }
 }
 async function flushRetryQueue(){
@@ -197,11 +197,11 @@ document.getElementById('completeBtn').onclick=async ()=>{
   if(hasCompleted) return;
   const completeBtn=document.getElementById('completeBtn');
   completeBtn.disabled=true;
-  const success=await touch(true);
-  if(!success){
+  const result=await touch(true);
+  if(!result.ok){
     hasCompleted=false;
     completeBtn.disabled=false;
-    showBlockingError('Assessment submission failed to sync with the server. Please retry now. You will not be redirected until it succeeds.');
+    showBlockingError('Submission failed — server error: '+result.error);
     return;
   }
   hasCompleted=true;
@@ -213,13 +213,15 @@ document.getElementById('blockingRetryBtn').onclick=async ()=>{
   const btn=document.getElementById('blockingRetryBtn');
   btn.disabled=true;
   await flushRetryQueue();
-  const success=await touch(true);
+  const result=await touch(true);
   btn.disabled=false;
-  if(success){
+  if(result.ok){
     hasCompleted=true;
     hideBlockingError();
     alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
     location.href=withShare('index.html');
+  } else {
+    showBlockingError('Submission failed — server error: '+result.error);
   }
 };
 </script></body></html>
