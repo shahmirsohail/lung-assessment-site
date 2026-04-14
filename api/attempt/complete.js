@@ -9,7 +9,7 @@ module.exports = async (req, res) => {
   try {
     const body = await readJsonBody(req);
     const incoming = buildAttemptPayload(body, { forceCompleted: true });
-    const existing = await getAttemptById(incoming.attempt_id);
+    const existing = await getAttemptById(incoming.attempt_id).catch(() => null);
 
     const merged = {
       ...existing,

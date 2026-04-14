@@ -25,7 +25,11 @@ async function supabaseFetch(path, opts = {}) {
   }
 
   if (res.status === 204 || res.status === 201) return null;
-  return res.json();
+  try {
+    return await res.json();
+  } catch (e) {
+    throw new Error(`Supabase response parse failed (${res.status}): ${e.message}`);
+  }
 }
 
 async function upsertAttempt(attempt) {
