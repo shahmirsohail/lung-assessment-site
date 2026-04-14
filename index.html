@@ -105,6 +105,15 @@ async function postJson(url, body){
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
+async function startAttempt(user){
+  return postJson('/api/attempt/start',{
+    learner_id:user.learner_id||'',
+    name:user.name||'',
+    email:user.email||'',
+    started:true,
+    completed:false,
+  });
+}
 const identityUser=ensureLearnerIdentity();
 nameInput.value=identityUser.name||'';
 emailInput.value=identityUser.email||'';
