@@ -7,6 +7,7 @@ const APP_VERSION='2026-04-06-course-hotfix-1';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 const RETRY_QUEUE_KEY='lungAssessmentRetryQueue';
 const SHARE_QUERY=window.location.search||'';
+function withShare(url){if(!SHARE_QUERY) return url; const token=SHARE_QUERY.replace(/^\?/,''); const joiner=url.includes('?')?'&':'?'; return `${url}${joiner}${token}`;}
 let quizVarNames=[];
 let hasCompleted=false;
 let retryInFlight=false;
