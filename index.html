@@ -17,6 +17,7 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
   <input id="email" placeholder="Learner email">
   <button id="saveBtn">Save learner</button>
   <button id="launchBtn">Launch assessment</button>
+  <p id="launchStatus" class="small" style="color:#b00020"></p>
   <p class="small">This version saves records to your internal database and sends completion emails when submitted.</p>
 </div>
 <div class="card">
@@ -37,6 +38,7 @@ const emailInput=document.getElementById('email');
 const saveBtn=document.getElementById('saveBtn');
 const launchBtn=document.getElementById('launchBtn');
 const exportBtn=document.getElementById('exportBtn');
+const launchStatus=document.getElementById('launchStatus');
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
@@ -102,6 +104,19 @@ async function postJson(url, body){
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
+async function startAttempt(user){
+  return postJson('/api/attempt/start',{
+    learner_id:user.learner_id||'',
+    name:user.name||'',
+    email:user.email||'',
+    started:true,
+    completed:false,
+  });
+}
+function generateAttemptId(){
+  if(window.crypto?.randomUUID){return window.crypto.randomUUID();}
+  return `attempt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 const identityUser=ensureLearnerIdentity();
 nameInput.value=identityUser.name||'';
 emailInput.value=identityUser.email||'';
@@ -113,11 +128,31 @@ saveBtn.onclick=()=>{
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
   const currentUser=ensureLearnerIdentity();
-  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
+  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:''};
   saveUser(u);
-  upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
-  const assessmentWindow=window.open('course.html','_blank');
-  if(!assessmentWindow){ location.href='course.html'; }
+  launchStatus.textContent='';
+  const preopenedWindow=window.open('about:blank','_blank');
+  try {
+    const started=await startAttempt(u);
+    u.attempt_id=started.attempt_id||'';
+    if(!u.attempt_id){throw new Error('No attempt_id returned from server');}
+  } catch (e) {
+    // Don't block learner launch if API is temporarily unavailable.
+    u.attempt_id=generateAttemptId();
+    launchStatus.textContent=`Warning: server start failed (${e.message}). Launching with offline fallback attempt id.`;
+  }
+  try {
+    saveUser(u);
+    upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
+    if(preopenedWindow){
+      preopenedWindow.location.href='course.html';
+    } else {
+      location.href='course.html';
+    }
+  } catch (e) {
+    if(preopenedWindow && !preopenedWindow.closed){preopenedWindow.close();}
+    alert(`Could not launch assessment: ${e.message}`);
+  }
 }
 exportBtn.onclick=exportCSV;
 window.addEventListener('focus',render);

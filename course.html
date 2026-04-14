@@ -6,11 +6,27 @@ const APP_VERSION='2026-04-06-course-hotfix-1';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 let quizVarNames=[];
 let hasCompleted=false;
+const captureDebug={
+  player_found:false,
+  quiz_var_count:0,
+  interaction_count:0,
+  last_error:'',
+  last_capture_at:'',
+  last_error_detail:''
+};
 const STABLE_RESPONSE_VAR='CapturedResponsesJson';
 const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
+function setCaptureError(code, err){
+  captureDebug.last_error=String(code||'capture_error');
+  captureDebug.last_error_detail=err?String(err.message||err):'';
+}
+function clearCaptureError(){
+  captureDebug.last_error='';
+  captureDebug.last_error_detail='';
+}
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
 async function loadAssessmentMetadata(){
   try{
@@ -42,7 +58,12 @@ function getAssessmentResponses(){
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
-    if(!player) return {};
+    if(!player){
+      captureDebug.player_found=false;
+      captureDebug.interaction_count=0;
+      return {};
+    }
+    captureDebug.player_found=true;
 
     const responses={};
 
@@ -76,6 +97,7 @@ function getAssessmentResponses(){
       }
     }
 
+    captureDebug.interaction_count=Object.keys(responses).length;
     return responses;
   }catch(e){
     captureDebug.player_found=false;
@@ -93,6 +115,7 @@ async function postJson(url, body){
 function buildPayload(completed=false){
   const mins=Math.round((Date.now()-start)/60000);
   const nowIso=new Date().toISOString();
+  if(!user.attempt_id){throw new Error('Missing attempt_id. Return to index and relaunch assessment.')}
   const responses=getAssessmentResponses();
   captureDebug.last_capture_at=nowIso;
   return {
@@ -115,15 +138,21 @@ async function touch(completed=false){
     await postJson(completed?'/api/attempt/complete':'/api/attempt/progress', payload);
   }catch(e){
     console.warn('Server sync failed', e.message);
+    if(completed) throw e;
   }
 }
 loadAssessmentMetadata();
 setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
 document.getElementById('completeBtn').onclick=async ()=>{
   if(hasCompleted) return;
-  hasCompleted=true;
-  await touch(true);
-  alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
-  location.href='index.html';
+  try{
+    hasCompleted=true;
+    await touch(true);
+    alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
+    location.href='index.html';
+  }catch(e){
+    hasCompleted=false;
+    alert(`Submission failed: ${e.message}`);
+  }
 };
 </script></body></html>
