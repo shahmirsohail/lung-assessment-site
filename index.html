@@ -8,6 +8,7 @@ input,button{padding:10px;font-size:16px;margin:6px 0;width:100%;max-width:420px
 button{cursor:pointer}
 table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid #ddd;padding:8px;text-align:left}
 .small{color:#555;font-size:14px}
+.error{color:#b00020;font-weight:600;min-height:1.2em}
 </style></head>
 <body>
 <h1>Lung Ultrasound Assessment</h1>
@@ -17,7 +18,7 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
   <input id="email" placeholder="Learner email">
   <button id="saveBtn">Save learner</button>
   <button id="launchBtn">Launch assessment</button>
-  <p id="launchStatus" class="small" style="color:#b00020"></p>
+  <p id="launchError" class="error" role="alert" aria-live="polite"></p>
   <p class="small">This version saves records to your internal database and sends completion emails when submitted.</p>
 </div>
 <div class="card">
@@ -37,16 +38,9 @@ const nameInput=document.getElementById('name');
 const emailInput=document.getElementById('email');
 const saveBtn=document.getElementById('saveBtn');
 const launchBtn=document.getElementById('launchBtn');
+const launchError=document.getElementById('launchError');
 const exportBtn=document.getElementById('exportBtn');
 const launchStatus=document.getElementById('launchStatus');
-const adminBtn=document.getElementById('adminBtn');
-const SHARE_QUERY=window.location.search||'';
-function shareUrl(url){
-  if(!SHARE_QUERY) return url;
-  const token=SHARE_QUERY.replace(/^\?/,'');
-  const joiner=url.includes('?')?'&':'?';
-  return `${url}${joiner}${token}`;
-}
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
@@ -107,7 +101,7 @@ function exportCSV(){
   a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
 }
 async function postJson(url, body){
-  const res=await fetch(shareUrl(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch(withShare(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
@@ -121,10 +115,6 @@ async function startAttempt(user){
     completed:false,
   });
 }
-function generateAttemptId(){
-  if(window.crypto?.randomUUID){return window.crypto.randomUUID();}
-  return `attempt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 const identityUser=ensureLearnerIdentity();
 nameInput.value=identityUser.name||'';
 emailInput.value=identityUser.email||'';
@@ -136,34 +126,24 @@ saveBtn.onclick=()=>{
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
   const currentUser=ensureLearnerIdentity();
-  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:''};
-  saveUser(u);
-  launchStatus.textContent='';
-  const preopenedWindow=window.open('about:blank','_blank');
-  try {
-    const started=await startAttempt(u);
-    u.attempt_id=started.attempt_id||'';
-    if(!u.attempt_id){throw new Error('No attempt_id returned from server');}
-  } catch (e) {
-    // Don't block learner launch if API is temporarily unavailable.
-    u.attempt_id=generateAttemptId();
-    launchStatus.textContent=`Warning: server start failed (${e.message}). Launching with offline fallback attempt id.`;
-  }
-  try {
+  const baseUser={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
+  launchError.textContent='';
+  launchBtn.disabled=true;
+  try{
+    const startResult=await postJson('/api/attempt/start',{name:baseUser.name,email:baseUser.email,learner_id:baseUser.learner_id});
+    const u={...baseUser,attempt_id:startResult.attempt_id};
     saveUser(u);
     upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
-    if(preopenedWindow){
-      preopenedWindow.location.href=shareUrl('course.html');
-    } else {
-      location.href=shareUrl('course.html');
-    }
-  } catch (e) {
-    if(preopenedWindow && !preopenedWindow.closed){preopenedWindow.close();}
-    alert(`Could not launch assessment: ${e.message}`);
+    const assessmentWindow=window.open('course.html','_blank');
+    if(!assessmentWindow){ location.href='course.html'; }
+  }catch(err){
+    launchError.textContent=err?.message||'Unable to start assessment. Please try again.';
+  }finally{
+    launchBtn.disabled=false;
   }
 }
 exportBtn.onclick=exportCSV;
-adminBtn.onclick=()=>{location.href=shareUrl('admin.html')};
+adminBtn.onclick=()=>{location.href=withShare('admin.html')};
 window.addEventListener('focus',render);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});
 render();

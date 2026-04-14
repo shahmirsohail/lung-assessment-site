@@ -30,7 +30,7 @@ const emailFilter=document.getElementById('emailFilter');
 const statusEl=document.getElementById('status');
 const tableEl=document.getElementById('table');
 const SHARE_QUERY=window.location.search||'';
-function shareUrl(url){
+function withShare(url){
   if(!SHARE_QUERY) return url;
   const token=SHARE_QUERY.replace(/^\?/,'');
   const joiner=url.includes('?')?'&':'?';
@@ -45,7 +45,7 @@ async function loadAttempts(){
   statusEl.textContent='Loading...';
   tableEl.innerHTML='';
 
-  const res=await fetch(shareUrl(`/api/admin/attempts${q}`),{headers:{'x-admin-token':token}});
+  const res=await fetch(withShare(`/api/admin/attempts${q}`),{headers:{'x-admin-token':token}});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid response'}));
   if(!res.ok || !data.ok){statusEl.textContent=`Error: ${data.error||'Request failed'}`; return;}
 
@@ -74,7 +74,7 @@ async function loadAttempts(){
 async function resend(attemptId,target){
   const token=tokenInput.value.trim();
   if(!token){alert('Admin token required');return;}
-  const res=await fetch(shareUrl('/api/admin/resend'),{
+  const res=await fetch(withShare('/api/admin/resend'),{
     method:'POST',
     headers:{'Content-Type':'application/json','x-admin-token':token},
     body:JSON.stringify({attempt_id:attemptId,target})
@@ -85,6 +85,6 @@ async function resend(attemptId,target){
 }
 
 document.getElementById('loadBtn').onclick=loadAttempts;
-document.getElementById('backBtn').onclick=()=>{location.href=shareUrl('index.html')};
+document.getElementById('backBtn').onclick=()=>{location.href=withShare('index.html')};
 </script>
 </body></html>
