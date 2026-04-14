@@ -1,7 +1,7 @@
 const { json, readJsonBody, getEnv, nowIso } = require('../_lib/config');
 const { buildAttemptPayload } = require('../_lib/attempt');
 const { upsertAttempt, getAttemptById, insertEmailLog } = require('../_lib/supabase');
-const { sendResendEmail, buildSummaryHtml } = require('../_lib/email');
+const { sendEmail, buildSummaryHtml } = require('../_lib/email');
 
 async function safeInsertEmailLog(log) {
   try { await insertEmailLog(log); } catch { /* never let logging failures block submission */ }
@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
 
     if (!existing?.completion_email_sent_at) {
       try {
-        const learnerResult = await sendResendEmail({
+        const learnerResult = await sendEmail({
           to: [merged.learner_email],
           subject: 'Your Lung Ultrasound Assessment results',
           html: summaryHtml,
@@ -56,7 +56,7 @@ module.exports = async (req, res) => {
 
     if (adminEmail && !existing?.admin_email_sent_at) {
       try {
-        const adminResult = await sendResendEmail({
+        const adminResult = await sendEmail({
           to: [adminEmail],
           subject: `Assessment completed: ${merged.learner_name || merged.learner_email}`,
           html: summaryHtml,

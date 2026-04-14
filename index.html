@@ -1,36 +1,95 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lung Ultrasound Assessment</title>
 <style>
-body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;line-height:1.5}
-.card{border:1px solid #ddd;border-radius:10px;padding:20px;margin:20px 0}
-input,button{padding:10px;font-size:16px;margin:6px 0;width:100%;max-width:420px}
-button{cursor:pointer}
-table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid #ddd;padding:8px;text-align:left}
-.small{color:#555;font-size:14px}
-.error{color:#b00020;font-weight:600;min-height:1.2em}
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    margin: 0; background: #f4f6f9; color: #1a1a2e; line-height: 1.6;
+  }
+  header {
+    background: #0b3d91; color: #fff; padding: 20px 32px;
+  }
+  header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
+  header p { margin: 4px 0 0; font-size: 14px; opacity: 0.8; }
+  main { max-width: 860px; margin: 36px auto; padding: 0 20px 60px; }
+  .card {
+    background: #fff; border-radius: 10px; padding: 28px 32px;
+    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .card h2 { margin: 0 0 18px; font-size: 17px; font-weight: 600; color: #0b3d91; }
+  label { display: block; font-size: 14px; font-weight: 500; color: #444; margin-bottom: 4px; }
+  .field { margin-bottom: 14px; }
+  input[type=text], input[type=email] {
+    width: 100%; max-width: 420px; padding: 10px 14px;
+    border: 1px solid #cdd2db; border-radius: 6px; font-size: 15px;
+    outline: none; transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=email]:focus { border-color: #0b3d91; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  button {
+    padding: 10px 22px; font-size: 15px; font-weight: 600;
+    border: none; border-radius: 6px; cursor: pointer; transition: background .15s, opacity .15s;
+  }
+  .btn-primary { background: #0b3d91; color: #fff; }
+  .btn-primary:hover { background: #0931711; }
+  .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn-secondary { background: #e8ecf4; color: #0b3d91; }
+  .btn-secondary:hover { background: #d6dcea; }
+  .btn-outline { background: #fff; color: #0b3d91; border: 1.5px solid #0b3d91; }
+  .btn-outline:hover { background: #f0f4ff; }
+  .error { color: #c0392b; font-size: 14px; font-weight: 500; min-height: 1.3em; margin-top: 6px; }
+  .save-feedback { font-size: 14px; color: #1a7a4a; font-weight: 500; display: none; }
+  .save-feedback.show { display: inline; }
+  /* Records table */
+  .records-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .records-header h2 { margin: 0; }
+  .empty-state { text-align: center; padding: 32px 0; color: #888; font-size: 15px; }
+  .empty-state svg { display: block; margin: 0 auto 10px; opacity: .35; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th { background: #f0f4ff; color: #0b3d91; font-weight: 600; text-align: left; padding: 10px 12px; white-space: nowrap; }
+  td { padding: 9px 12px; border-top: 1px solid #eef0f4; color: #2c2c3a; }
+  tr:hover td { background: #fafbff; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .badge-green { background: #d4f5e2; color: #1a7a4a; }
+  .badge-grey  { background: #eaeaea; color: #666; }
+  /* Footer admin link */
+  .footer-link { text-align: center; margin-top: 8px; }
+  .footer-link a { font-size: 13px; color: #888; text-decoration: none; border-bottom: 1px dotted #bbb; }
+  .footer-link a:hover { color: #0b3d91; border-color: #0b3d91; }
 </style></head>
 <body>
-<h1>Lung Ultrasound Assessment</h1>
-<div class="card">
-  <h2>Learner details</h2>
-  <input id="name" placeholder="Learner name">
-  <input id="email" placeholder="Learner email">
-  <button id="saveBtn">Save learner</button>
-  <button id="launchBtn">Launch assessment</button>
-  <p id="launchError" class="error" role="alert" aria-live="polite"></p>
-  <p class="small">This version saves records to your internal database and sends completion emails when submitted.</p>
+<header>
+  <h1>Lung Ultrasound Assessment</h1>
+</header>
+<main>
+  <div class="card">
+    <h2>Start assessment</h2>
+    <div class="field"><label for="name">Full name</label><input id="name" type="text" placeholder="Enter your full name" autocomplete="name"></div>
+    <div class="field"><label for="email">Email address</label><input id="email" type="email" placeholder="Enter your email address" autocomplete="email"></div>
+    <div class="btn-row">
+      <button id="saveBtn" class="btn-secondary">Save details</button>
+      <button id="launchBtn" class="btn-primary">Launch assessment</button>
+      <span id="saveFeedback" class="save-feedback">Details saved.</span>
+    </div>
+    <p id="launchError" class="error" role="alert" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <div class="records-header">
+      <h2>Your assessment records</h2>
+      <button id="exportBtn" class="btn-outline">&#8675; Download results</button>
+    </div>
+    <div id="records"></div>
+  </div>
+</main>
+<div class="footer-link">
+  <a id="adminLink" href="#">Admin dashboard</a>
 </div>
-<div class="card">
-  <h2>Local cache (backup only)</h2>
-  <button id="exportBtn">Export CSV</button>
-  <div id="records"></div>
-</div>
-<div class="card">
-  <h2>Internal admin</h2>
-  <p class="small">Use the internal dashboard to view all learner submissions.</p>
-  <button id="adminBtn">Open admin dashboard</button>
-</div>
+
 <script>
 const KEY='lungAssessmentLocalRecords';
 const USER='lungAssessmentLocalUser';
@@ -40,7 +99,7 @@ const saveBtn=document.getElementById('saveBtn');
 const launchBtn=document.getElementById('launchBtn');
 const launchError=document.getElementById('launchError');
 const exportBtn=document.getElementById('exportBtn');
-const adminBtn=document.getElementById('adminBtn');
+const saveFeedback=document.getElementById('saveFeedback');
 const SHARE_QUERY=window.location.search||'';
 function withShare(url){
   if(!SHARE_QUERY) return url;
@@ -48,6 +107,7 @@ function withShare(url){
   const joiner=url.includes('?')?'&':'?';
   return `${url}${joiner}${token}`;
 }
+document.getElementById('adminLink').href=withShare('admin.html');
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
@@ -65,10 +125,7 @@ function ensureLearnerIdentity(){
   const records=loadRecords();
   let changed=false;
   for(const record of records){
-    if(!record.learner_id){
-      record.learner_id=learner_id;
-      changed=true;
-    }
+    if(!record.learner_id){record.learner_id=learner_id; changed=true;}
   }
   if(changed){saveRecords(records)}
   return updatedUser;
@@ -79,25 +136,32 @@ function upsertRecord(update){
   if(i<0){records.push(update)} else {records[i]={...records[i],...update}}
   saveRecords(records); render();
 }
-function formatCaptureDebug(debug){
-  if(!debug) return 'Not captured';
-  const parts=[];
-  parts.push(debug.player_found?'Player ✓':'Player ✗');
-  parts.push(`Vars: ${debug.quiz_var_count??0}`);
-  parts.push(`Responses: ${debug.interaction_count??0}`);
-  if(debug.last_error){parts.push(`Error: ${debug.last_error}`)}
-  if(debug.last_capture_at){parts.push(`At: ${debug.last_capture_at}`)}
-  return parts.join(' | ');
+function formatDate(iso){
+  if(!iso) return '—';
+  try{return new Date(iso).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  catch{return iso;}
 }
 function render(){
   const r=loadRecords();
-  if(!r.length){document.getElementById('records').innerHTML='<p>No local records yet.</p>'; return;}
-  let html='<table><tr><th>Name</th><th>Email</th><th>Attempt ID</th><th>Started</th><th>Completed</th><th>Minutes</th><th>Responses captured</th><th>Capture debug</th></tr>';
-  for(const x of r){
-    const debugText=formatCaptureDebug(x.capture_debug);
-    html+=`<tr><td>${x.name||''}</td><td>${x.email||''}</td><td>${x.attempt_id||''}</td><td>${x.started?'Yes':'No'}</td><td>${x.completed?'Yes':'No'}</td><td>${x.minutes_spent||0}</td><td>${Object.keys(x.responses||{}).length}</td><td title="${debugText.replaceAll('"','&quot;')}">${debugText}</td></tr>`
+  const container=document.getElementById('records');
+  if(!r.length){
+    container.innerHTML=`<div class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M8 8h5M8 16h4"/></svg>
+      No assessment records yet. Launch the assessment to get started.
+    </div>`;
+    return;
   }
-  html+='</table>'; document.getElementById('records').innerHTML=html;
+  let html='<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Started</th><th>Status</th><th>Time spent</th></tr></thead><tbody>';
+  for(const x of r){
+    const statusBadge=x.completed
+      ?'<span class="badge badge-green">Completed</span>'
+      :'<span class="badge badge-grey">In progress</span>';
+    const mins=x.minutes_spent||0;
+    const timeStr=mins>0?`${mins} min`:'—';
+    html+=`<tr><td>${x.name||'—'}</td><td>${x.email||'—'}</td><td>${formatDate(x.started_at)}</td><td>${statusBadge}</td><td>${timeStr}</td></tr>`;
+  }
+  html+='</tbody></table></div>';
+  container.innerHTML=html;
 }
 function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}
 function exportCSV(){
@@ -111,7 +175,7 @@ function exportCSV(){
     return [...base,...resp].join(',');
   })).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
+  a.href=URL.createObjectURL(blob); a.download='lung-assessment-results.csv'; a.click();
 }
 async function postJson(url, body){
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -119,22 +183,14 @@ async function postJson(url, body){
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
-async function startAttempt(user){
-  return postJson('/api/attempt/start',{
-    learner_id:user.learner_id||'',
-    name:user.name||'',
-    email:user.email||'',
-    started:true,
-    completed:false,
-  });
-}
 const identityUser=ensureLearnerIdentity();
 nameInput.value=identityUser.name||'';
 emailInput.value=identityUser.email||'';
 saveBtn.onclick=()=>{
   const currentUser=ensureLearnerIdentity();
   saveUser({name:nameInput.value.trim(),email:emailInput.value.trim(),attempt_id:currentUser.attempt_id||'',learner_id:currentUser.learner_id});
-  alert('Saved');
+  saveFeedback.classList.add('show');
+  setTimeout(()=>saveFeedback.classList.remove('show'),2500);
 }
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
@@ -142,14 +198,12 @@ launchBtn.onclick=async ()=>{
   const baseUser={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
   launchError.textContent='';
   if(!baseUser.name){
-    launchError.textContent='Please enter learner name before launching.';
-    nameInput.focus();
-    return;
+    launchError.textContent='Please enter your name before launching.';
+    nameInput.focus(); return;
   }
   if(!baseUser.email){
-    launchError.textContent='Please enter learner email before launching.';
-    emailInput.focus();
-    return;
+    launchError.textContent='Please enter your email address before launching.';
+    emailInput.focus(); return;
   }
   launchBtn.disabled=true;
   try{
@@ -166,7 +220,6 @@ launchBtn.onclick=async ()=>{
   }
 }
 exportBtn.onclick=exportCSV;
-adminBtn.onclick=()=>{location.href=withShare('admin.html')};
 window.addEventListener('focus',render);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});
 render();
