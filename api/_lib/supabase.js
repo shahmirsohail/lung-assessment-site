@@ -24,7 +24,7 @@ async function supabaseFetch(path, opts = {}) {
     throw new Error(`Supabase request failed (${res.status}): ${text}`);
   }
 
-  if (res.status === 204) return null;
+  if (res.status === 204 || res.status === 201) return null;
   return res.json();
 }
 
