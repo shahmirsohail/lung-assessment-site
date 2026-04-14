@@ -102,6 +102,15 @@ async function postJson(url, body){
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
 }
+async function startAttempt(user){
+  return postJson('/api/attempt/start',{
+    learner_id:user.learner_id||'',
+    name:user.name||'',
+    email:user.email||'',
+    started:true,
+    completed:false,
+  });
+}
 const identityUser=ensureLearnerIdentity();
 nameInput.value=identityUser.name||'';
 emailInput.value=identityUser.email||'';
@@ -113,11 +122,19 @@ saveBtn.onclick=()=>{
 launchBtn.onclick=async ()=>{
   const now=new Date().toISOString();
   const currentUser=ensureLearnerIdentity();
-  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
+  const u={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:''};
   saveUser(u);
-  upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
-  const assessmentWindow=window.open('course.html','_blank');
-  if(!assessmentWindow){ location.href='course.html'; }
+  try{
+    const started=await startAttempt(u);
+    u.attempt_id=started.attempt_id||'';
+    if(!u.attempt_id){throw new Error('No attempt_id returned from server');}
+    saveUser(u);
+    upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
+    const assessmentWindow=window.open('course.html','_blank');
+    if(!assessmentWindow){ location.href='course.html'; }
+  }catch(e){
+    alert(`Could not start attempt: ${e.message}`);
+  }
 }
 exportBtn.onclick=exportCSV;
 window.addEventListener('focus',render);
