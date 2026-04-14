@@ -40,6 +40,7 @@ const saveBtn=document.getElementById('saveBtn');
 const launchBtn=document.getElementById('launchBtn');
 const launchError=document.getElementById('launchError');
 const exportBtn=document.getElementById('exportBtn');
+const launchStatus=document.getElementById('launchStatus');
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
