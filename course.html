@@ -12,7 +12,7 @@ let quizVarNames=[];
 let hasCompleted=false;
 let retryInFlight=false;
 const STABLE_RESPONSE_VAR='CapturedResponsesJson';
-const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
+const OPTIONAL_STATUS_VARS=['Visited','LastSlideViewed_6131NtijqTH'];
 const captureDebug={
   player_found:false,
   quiz_var_count:0,
@@ -55,7 +55,10 @@ async function loadAssessmentMetadata(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
     const txt=await res.text();
-    quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
+    quizVarNames=[...new Set([
+      ...(txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]),
+      ...(txt.match(/Slider\d+/g)||[]),
+    ])];
     captureDebug.quiz_var_count=quizVarNames.length;
     if(!quizVarNames.length){setCaptureError('metadata_no_quiz_vars')} else if(captureDebug.last_error?.code==='metadata_parse_failed'){clearCaptureError()}
   }catch(e){
