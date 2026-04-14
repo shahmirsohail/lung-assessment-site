@@ -40,7 +40,7 @@ const saveBtn=document.getElementById('saveBtn');
 const launchBtn=document.getElementById('launchBtn');
 const launchError=document.getElementById('launchError');
 const exportBtn=document.getElementById('exportBtn');
-const launchStatus=document.getElementById('launchStatus');
+const adminBtn=document.getElementById('adminBtn');
 const SHARE_QUERY=window.location.search||'';
 function withShare(url){
   if(!SHARE_QUERY) return url;
@@ -135,6 +135,16 @@ launchBtn.onclick=async ()=>{
   const currentUser=ensureLearnerIdentity();
   const baseUser={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
   launchError.textContent='';
+  if(!baseUser.name){
+    launchError.textContent='Please enter learner name before launching.';
+    nameInput.focus();
+    return;
+  }
+  if(!baseUser.email){
+    launchError.textContent='Please enter learner email before launching.';
+    emailInput.focus();
+    return;
+  }
   launchBtn.disabled=true;
   try{
     const startResult=await postJson('/api/attempt/start',{name:baseUser.name,email:baseUser.email,learner_id:baseUser.learner_id});
