@@ -107,7 +107,7 @@ function exportCSV(){
   const allCols=[...baseCols,...responseKeys];
   const csv=[allCols.join(',')].concat(rows.map(r=>{
     const base=baseCols.map(c=>csvEscape(r[c]));
-    const resp=responseKeys.map(k=>csvEscape(r.responses?.[k]??''));
+    const resp=responseKeys.map(k=>{const v=r.responses?.[k]??'';return csvEscape(typeof v==='object'?JSON.stringify(v):v);});
     return [...base,...resp].join(',');
   })).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
