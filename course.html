@@ -13,6 +13,67 @@ let hasCompleted=false;
 let retryInFlight=false;
 const STABLE_RESPONSE_VAR='CapturedResponsesJson';
 const OPTIONAL_STATUS_VARS=['Visited','LastSlideViewed_6131NtijqTH'];
+const CASE_SLIDE_MAP={
+  "5c8hcz1Vu7s":{c:"Intro",q:"Quadrants"},
+  "69lVJT1f0QB":{c:"Case 1",q:"Primary Pathology"},
+  "5dJy4aYxSDa":{c:"Case 1",q:"Secondary Pathology"},
+  "6CjmNVS7dAB":{c:"Case 2",q:"Primary Pathology"},
+  "6Wf8z7Tn6h3":{c:"Case 2",q:"Secondary Pathology"},
+  "67XJTnlJLdm":{c:"Case 3",q:"Primary Pathology"},
+  "6pkJEWER6V8":{c:"Case 3",q:"Secondary Pathology"},
+  "5ekAqFqSQ6j":{c:"Case 3",q:"Confidence Level"},
+  "63Tub0CMiyi":{c:"Case 4",q:"Normal or Abnormal"},
+  "65SwsELJ2FZ":{c:"Case 4",q:"Primary Pathology"},
+  "5eDBBzCzXUY":{c:"Case 4",q:"Secondary Pathology"},
+  "5dmHQMKvURG":{c:"Case 5",q:"Normal or Abnormal"},
+  "6lT67FBHJaP":{c:"Case 5",q:"Primary Pathology"},
+  "6NJDylTYzfm":{c:"Case 5",q:"Secondary Pathology"},
+  "5sjsYvnI4ND":{c:"Case 5",q:"Confidence Level"},
+  "5WnoxU420tv":{c:"Case 6",q:"Primary Pathology"},
+  "6BJNTtFq1bW":{c:"Case 6",q:"Secondary Pathology"},
+  "5gLDTY263PC":{c:"Case 7",q:"Normal or Abnormal"},
+  "6Zi77SBFnNc":{c:"Case 7",q:"Primary Pathology"},
+  "6blq9AKhfTs":{c:"Case 7",q:"Secondary Pathology"},
+  "69KCQTSNhwB":{c:"Case 8",q:"Normal or Abnormal"},
+  "6Co9whtlpSP":{c:"Case 8",q:"Primary Pathology"},
+  "5t3redaWdm9":{c:"Case 8",q:"Secondary Pathology"},
+  "6MrUAi6ugfV":{c:"Case 9",q:"Primary Pathology"},
+  "6FnPOeyPW5U":{c:"Case 9",q:"Secondary Pathology"},
+  "5yiBdeoVNKk":{c:"Case 10",q:"Normal or Abnormal"},
+  "68gExR3Bkgs":{c:"Case 10",q:"Primary Pathology"},
+  "5V098HWA8ek":{c:"Case 10",q:"Secondary Pathology"},
+  "6Cl7MUbEhFR":{c:"Case 10",q:"Confidence Level"},
+  "5es0zacRKUu":{c:"Case 11",q:"Normal or Abnormal"},
+  "5o5uQiLCyuZ":{c:"Case 11",q:"Primary Pathology"},
+  "6cjohDIo3EL":{c:"Case 11",q:"Secondary Pathology"},
+  "5uO28ZT8JmY":{c:"Case 11",q:"Confidence Level"},
+  "6oXgbMJPlSD":{c:"Case 12",q:"Primary Pathology"},
+  "5buOyermflr":{c:"Case 12",q:"Secondary Pathology"},
+  "6ADrbVRsZTz":{c:"Case 13",q:"Normal or Abnormal"},
+  "5y49wWowd4C":{c:"Case 13",q:"Primary Pathology"},
+  "5aoyItdpB70":{c:"Case 13",q:"Secondary Pathology"},
+  "5c0upnqD5FS":{c:"Case 13",q:"Confidence Level"},
+  "5wHCjfLD8Yv":{c:"Case 14",q:"Primary Pathology"},
+  "62gmvQeEJTe":{c:"Case 14",q:"Secondary Pathology"},
+  "5iAG4JPatH3":{c:"Case 14",q:"Confidence Level"},
+  "5b9RInqtc9W":{c:"Case 15",q:"Normal or Abnormal"},
+  "6Ro9YHFnfxv":{c:"Case 15",q:"Primary Pathology"},
+  "6JnjXavlY2Q":{c:"Case 15",q:"Secondary Pathology"},
+  "62pqJBdqqhI":{c:"Case 15",q:"Confidence Level"},
+  "5nZjNiZcj9J":{c:"Case 16",q:"Normal or Abnormal"},
+  "5ghCgSIHT6w":{c:"Case 16",q:"Primary Pathology"},
+  "6G5WSRfzWy1":{c:"Case 16",q:"Secondary Pathology"},
+  "5oxcmhuC8Zb":{c:"Case 16",q:"Confidence Level"},
+};
+function transformResponseKeys(raw){
+  const out={};
+  for(const [k,v] of Object.entries(raw)){
+    const m=k.match(/^CurrentQuiz_([A-Za-z0-9]+)$/);
+    if(m){const map=CASE_SLIDE_MAP[m[1]]; if(map){out[`${map.c} - ${map.q}`]=v; continue;}}
+    out[k]=v;
+  }
+  return out;
+}
 const captureDebug={
   player_found:false,
   quiz_var_count:0,
@@ -121,11 +182,12 @@ function getAssessmentResponses(){
         if(!(name in responses)) responses[name]=value;
       }
     }
-    captureDebug.interaction_count=Object.keys(responses).length;
+    const transformed=transformResponseKeys(responses);
+    captureDebug.interaction_count=Object.keys(transformed).length;
     if(captureDebug.last_error?.code==='player_unavailable' || captureDebug.last_error?.code==='capture_exception'){
       clearCaptureError();
     }
-    return responses;
+    return transformed;
   }catch(e){
     captureDebug.player_found=false;
     captureDebug.interaction_count=0;
