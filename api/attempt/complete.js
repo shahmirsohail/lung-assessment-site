@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     };
 
     const summaryHtml = buildSummaryHtml(merged);
-    const adminEmail = getEnv('ADMIN_RESULTS_EMAIL');
+    const adminEmail = getEnv('ADMIN_RESULTS_EMAIL', false);
 
     if (!existing?.completion_email_sent_at) {
       try {
@@ -50,7 +50,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    if (!existing?.admin_email_sent_at) {
+    if (adminEmail && !existing?.admin_email_sent_at) {
       try {
         const adminResult = await sendResendEmail({
           to: [adminEmail],
