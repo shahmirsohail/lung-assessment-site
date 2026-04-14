@@ -1,11 +1,12 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}.right{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}#syncStatus{font-size:13px;font-weight:600;padding:5px 8px;border-radius:999px;background:#e8f3ff;color:#0b4d8c}#syncStatus.pending{background:#fff3cd;color:#825200}#syncStatus.failed{background:#f8d7da;color:#842029}.blocking-error{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:9999}.blocking-error.show{display:flex}.blocking-error .panel{max-width:520px;background:#fff;border-radius:8px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.25)}.blocking-error h2{margin:0 0 12px;font-size:20px}.blocking-error p{margin:0 0 14px;line-height:1.4}.blocking-error .actions{display:flex;gap:10px;justify-content:flex-end}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div class="right"><span id="syncStatus">Synced</span><button id="completeBtn">Submit & send results</button> <button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div class="right"><span id="syncStatus">Synced</span><button id="completeBtn">Submit & send results</button> <button onclick="location.href=withShare('index.html')">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
 <div id="blockingError" class="blocking-error" role="alertdialog" aria-modal="true" aria-labelledby="blockingErrorTitle"><div class="panel"><h2 id="blockingErrorTitle">Could not submit assessment</h2><p id="blockingErrorText">We could not sync your completion with the server. Please check your connection and retry. You will not be redirected until this succeeds.</p><div class="actions"><button id="blockingRetryBtn">Retry now</button></div></div></div>
 <script>
 const APP_VERSION='2026-04-06-course-hotfix-1';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
 const RETRY_QUEUE_KEY='lungAssessmentRetryQueue';
+const SHARE_QUERY=window.location.search||'';
 let quizVarNames=[];
 let hasCompleted=false;
 let retryInFlight=false;
@@ -42,6 +43,13 @@ function setCaptureError(code, err){
 function clearCaptureError(){
   captureDebug.last_error='';
   captureDebug.last_error_detail='';
+}
+function withShare(url){
+  if(!SHARE_QUERY) return url;
+  const token=SHARE_QUERY.replace(/^\?/,'');
+  if(!token) return url;
+  const joiner=url.includes('?')?'&':'?';
+  return `${url}${joiner}${token}`;
 }
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
 function setSyncStatus(state){
@@ -137,7 +145,7 @@ function getAssessmentResponses(){
   }
 }
 async function postJson(url, body){
-  const res=await fetch(withShare(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
@@ -213,7 +221,7 @@ document.getElementById('completeBtn').onclick=async ()=>{
   hasCompleted=true;
   hideBlockingError();
   alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
-  location.href='index.html';
+  location.href=withShare('index.html');
 };
 document.getElementById('blockingRetryBtn').onclick=async ()=>{
   const btn=document.getElementById('blockingRetryBtn');
@@ -225,7 +233,7 @@ document.getElementById('blockingRetryBtn').onclick=async ()=>{
     hasCompleted=true;
     hideBlockingError();
     alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
-    location.href='index.html';
+    location.href=withShare('index.html');
   }
 };
 </script></body></html>
