@@ -102,8 +102,14 @@ function render(){
 function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"'}
 function exportCSV(){
   const rows=loadRecords(); if(!rows.length) return;
-  const cols=['name','email','attempt_id','started','completed','started_at','last_opened_at','minutes_spent','responses'];
-  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>csvEscape(c==='responses'?JSON.stringify(r[c]||{}):r[c])).join(','))).join('\n');
+  const responseKeys=[...new Set(rows.flatMap(r=>Object.keys(r.responses||{})))].sort();
+  const baseCols=['name','email','attempt_id','started','completed','started_at','last_opened_at','minutes_spent'];
+  const allCols=[...baseCols,...responseKeys];
+  const csv=[allCols.join(',')].concat(rows.map(r=>{
+    const base=baseCols.map(c=>csvEscape(r[c]));
+    const resp=responseKeys.map(k=>csvEscape(r.responses?.[k]??''));
+    return [...base,...resp].join(',');
+  })).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
 }
