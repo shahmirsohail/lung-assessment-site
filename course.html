@@ -116,10 +116,7 @@ async function loadAssessmentMetadata(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
     const txt=await res.text();
-    quizVarNames=[...new Set([
-      ...(txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]),
-      ...(txt.match(/Slider\d+/g)||[]),
-    ])];
+    quizVarNames=[...new Set(txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[])];
     captureDebug.quiz_var_count=quizVarNames.length;
     if(!quizVarNames.length){setCaptureError('metadata_no_quiz_vars')} else if(captureDebug.last_error?.code==='metadata_parse_failed'){clearCaptureError()}
   }catch(e){
