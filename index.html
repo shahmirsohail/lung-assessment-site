@@ -29,7 +29,7 @@ table{border-collapse:collapse;width:100%;margin-top:15px}td,th{border:1px solid
 <div class="card">
   <h2>Internal admin</h2>
   <p class="small">Use the internal dashboard to view all learner submissions.</p>
-  <button onclick="location.href='admin.html'">Open admin dashboard</button>
+  <button id="adminBtn">Open admin dashboard</button>
 </div>
 <script>
 const KEY='lungAssessmentLocalRecords';
@@ -101,7 +101,7 @@ function exportCSV(){
   a.href=URL.createObjectURL(blob); a.download='lung-assessment-records.csv'; a.click();
 }
 async function postJson(url, body){
-  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch(withShare(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json().catch(()=>({ok:false,error:'Invalid server response'}));
   if(!res.ok || !data.ok){throw new Error(data.error||'Request failed')}
   return data;
@@ -143,6 +143,7 @@ launchBtn.onclick=async ()=>{
   }
 }
 exportBtn.onclick=exportCSV;
+adminBtn.onclick=()=>{location.href=withShare('admin.html')};
 window.addEventListener('focus',render);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});
 render();
