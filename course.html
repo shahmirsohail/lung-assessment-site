@@ -1,30 +1,39 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}</style></head>
-<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div><button id="completeBtn">Submit & send results</button> <button id="backBtn">Back</button></div></header><iframe id="assessmentFrame"></iframe>
+<title>Assessment</title><style>html,body{height:100%;margin:0;font-family:Arial,sans-serif}header{padding:10px 14px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;gap:10px;align-items:center;justify-content:space-between}iframe{width:100%;height:calc(100% - 58px);border:0}.left{display:flex;gap:10px;align-items:center}.right{display:flex;gap:10px;align-items:center}button{padding:8px 12px;font-size:14px;cursor:pointer}#syncStatus{font-size:13px;font-weight:600;padding:5px 8px;border-radius:999px;background:#e8f3ff;color:#0b4d8c}#syncStatus.pending{background:#fff3cd;color:#825200}#syncStatus.failed{background:#f8d7da;color:#842029}.blocking-error{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:9999}.blocking-error.show{display:flex}.blocking-error .panel{max-width:520px;background:#fff;border-radius:8px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.25)}.blocking-error h2{margin:0 0 12px;font-size:20px}.blocking-error p{margin:0 0 14px;line-height:1.4}.blocking-error .actions{display:flex;gap:10px;justify-content:flex-end}</style></head>
+<body><header><div class="left"><strong>Lung Ultrasound Assessment</strong><span id="learner"></span></div><div class="right"><span id="syncStatus">Synced</span><button id="completeBtn">Submit & send results</button> <button onclick="location.href='index.html'">Back</button></div></header><iframe id="assessmentFrame" src="module/story.html"></iframe>
+<div id="blockingError" class="blocking-error" role="alertdialog" aria-modal="true" aria-labelledby="blockingErrorTitle"><div class="panel"><h2 id="blockingErrorTitle">Could not submit assessment</h2><p id="blockingErrorText">We could not sync your completion with the server. Please check your connection and retry. You will not be redirected until this succeeds.</p><div class="actions"><button id="blockingRetryBtn">Retry now</button></div></div></div>
 <script>
 const APP_VERSION='2026-04-06-course-hotfix-1';
 const KEY='lungAssessmentLocalRecords'; const USER='lungAssessmentLocalUser'; const start=Date.now();
-const SHARE_QUERY=window.location.search||'';
-function withShare(url){
-  if(!SHARE_QUERY) return url;
-  const token=SHARE_QUERY.replace(/^\?/,'');
-  const joiner=url.includes('?')?'&':'?';
-  return `${url}${joiner}${token}`;
-}
+const RETRY_QUEUE_KEY='lungAssessmentRetryQueue';
 let quizVarNames=[];
 let hasCompleted=false;
+let retryInFlight=false;
+const STABLE_RESPONSE_VAR='CapturedResponsesJson';
+const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
 const captureDebug={
   player_found:false,
   quiz_var_count:0,
   interaction_count:0,
-  last_error:'',
-  last_capture_at:'',
-  last_error_detail:''
+  last_error:null,
+  last_capture_at:null,
 };
-const STABLE_RESPONSE_VAR='CapturedResponsesJson';
-const OPTIONAL_STATUS_VARS=['LastAnsweredCaseId','LastAnsweredAt','LastAnsweredTimestamp','AssessmentScore','AssessmentCompletionStatus'];
+function setCaptureError(code, err){
+  const errorState={code};
+  if(err){
+    errorState.message=err?.message?String(err.message):String(err);
+    if(err?.name) errorState.name=String(err.name);
+  }
+  captureDebug.last_error=errorState;
+}
+function clearCaptureError(){
+  captureDebug.last_error=null;
+}
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')} function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
+function loadRetryQueue(){return JSON.parse(localStorage.getItem(RETRY_QUEUE_KEY)||'[]')}
+function saveRetryQueue(queue){localStorage.setItem(RETRY_QUEUE_KEY, JSON.stringify(queue))}
+function enqueueRetry(item){const queue=loadRetryQueue(); queue.push(item); saveRetryQueue(queue)}
 function upsertRecord(update){let records=loadRecords(); let i=records.findIndex(r=>r.attempt_id===update.attempt_id || (r.email===update.email && update.email)); if(i<0){records.push(update)} else {records[i]={...records[i],...update}} saveRecords(records)}
 function setCaptureError(code, err){
   captureDebug.last_error=String(code||'capture_error');
@@ -35,15 +44,26 @@ function clearCaptureError(){
   captureDebug.last_error_detail='';
 }
 const user=loadUser(); document.getElementById('learner').textContent=user.email?`(${user.name||''} ${user.email})`:'';
-document.getElementById('assessmentFrame').src=withShare('module/story.html');
-document.getElementById('backBtn').onclick=()=>{location.href=withShare('index.html')};
+function setSyncStatus(state){
+  const el=document.getElementById('syncStatus');
+  if(!el) return;
+  el.classList.remove('pending','failed');
+  if(state==='pending'){el.textContent='Pending'; el.classList.add('pending'); return;}
+  if(state==='failed'){el.textContent='Failed'; el.classList.add('failed'); return;}
+  el.textContent='Synced';
+}
+function showBlockingError(message){
+  document.getElementById('blockingErrorText').textContent=message||'We could not sync your completion with the server. Please check your connection and retry. You will not be redirected until this succeeds.';
+  document.getElementById('blockingError').classList.add('show');
+}
+function hideBlockingError(){document.getElementById('blockingError').classList.remove('show')}
 async function loadAssessmentMetadata(){
   try{
     const res=await fetch('module/html5/data/js/data.js');
     const txt=await res.text();
     quizVarNames=[...new Set((txt.match(/CurrentQuiz_[A-Za-z0-9]+/g)||[]))];
     captureDebug.quiz_var_count=quizVarNames.length;
-    if(!quizVarNames.length){setCaptureError('metadata_no_quiz_vars')} else if(captureDebug.last_error==='metadata_parse_failed'){clearCaptureError()}
+    if(!quizVarNames.length){setCaptureError('metadata_no_quiz_vars')} else if(captureDebug.last_error?.code==='metadata_parse_failed'){clearCaptureError()}
   }catch(e){
     setCaptureError('metadata_parse_failed', e);
     quizVarNames=[];
@@ -70,11 +90,10 @@ function getAssessmentResponses(){
     if(!player){
       captureDebug.player_found=false;
       captureDebug.interaction_count=0;
-      return {};
+      setCaptureError('player_unavailable');
+      return responses;
     }
     captureDebug.player_found=true;
-
-    const responses={};
 
     const stablePayload=player.GetVar(STABLE_RESPONSE_VAR);
     const parsedPayload=safeParseJson(stablePayload);
@@ -105,8 +124,10 @@ function getAssessmentResponses(){
         if(!(name in responses)) responses[name]=value;
       }
     }
-
     captureDebug.interaction_count=Object.keys(responses).length;
+    if(captureDebug.last_error?.code==='player_unavailable' || captureDebug.last_error?.code==='capture_exception'){
+      clearCaptureError();
+    }
     return responses;
   }catch(e){
     captureDebug.player_found=false;
@@ -142,26 +163,69 @@ function buildPayload(completed=false){
 }
 async function touch(completed=false){
   const payload=buildPayload(completed);
+  const url=completed?'/api/attempt/complete':'/api/attempt/progress';
   upsertRecord(payload);
+  setSyncStatus('pending');
   try{
-    await postJson(completed?'/api/attempt/complete':'/api/attempt/progress', payload);
+    await postJson(url, payload);
+    setSyncStatus('synced');
+    return true;
   }catch(e){
     console.warn('Server sync failed', e.message);
-    if(completed) throw e;
+    setSyncStatus('failed');
+    enqueueRetry({url, payload, failed_at:new Date().toISOString()});
+    return false;
   }
+}
+async function flushRetryQueue(){
+  if(retryInFlight) return;
+  const queue=loadRetryQueue();
+  if(!queue.length) return;
+  retryInFlight=true;
+  setSyncStatus('pending');
+  const remaining=[];
+  for(const item of queue){
+    try{
+      await postJson(item.url, item.payload);
+    }catch(e){
+      remaining.push(item);
+    }
+  }
+  saveRetryQueue(remaining);
+  retryInFlight=false;
+  setSyncStatus(remaining.length?'failed':'synced');
 }
 loadAssessmentMetadata();
 setInterval(()=>touch(false),30000); window.addEventListener('beforeunload',()=>{if(!hasCompleted) touch(false)});
+setInterval(flushRetryQueue,45000);
+window.addEventListener('focus', flushRetryQueue);
 document.getElementById('completeBtn').onclick=async ()=>{
   if(hasCompleted) return;
-  try{
-    hasCompleted=true;
-    await touch(true);
-    alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
-    location.href=withShare('index.html');
-  }catch(e){
+  const completeBtn=document.getElementById('completeBtn');
+  completeBtn.disabled=true;
+  const success=await touch(true);
+  if(!success){
     hasCompleted=false;
-    alert(`Submission failed: ${e.message}`);
+    completeBtn.disabled=false;
+    showBlockingError('Assessment submission failed to sync with the server. Please retry now. You will not be redirected until it succeeds.');
+    return;
+  }
+  hasCompleted=true;
+  hideBlockingError();
+  alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
+  location.href='index.html';
+};
+document.getElementById('blockingRetryBtn').onclick=async ()=>{
+  const btn=document.getElementById('blockingRetryBtn');
+  btn.disabled=true;
+  await flushRetryQueue();
+  const success=await touch(true);
+  btn.disabled=false;
+  if(success){
+    hasCompleted=true;
+    hideBlockingError();
+    alert('Assessment submitted. Results were emailed to learner and internal recipient (if email setup is configured).');
+    location.href='index.html';
   }
 };
 </script></body></html>
