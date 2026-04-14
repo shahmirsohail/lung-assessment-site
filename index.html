@@ -41,6 +41,13 @@ const launchBtn=document.getElementById('launchBtn');
 const launchError=document.getElementById('launchError');
 const exportBtn=document.getElementById('exportBtn');
 const launchStatus=document.getElementById('launchStatus');
+const SHARE_QUERY=window.location.search||'';
+function withShare(url){
+  if(!SHARE_QUERY) return url;
+  const token=SHARE_QUERY.replace(/^\?/,'');
+  const joiner=url.includes('?')?'&':'?';
+  return `${url}${joiner}${token}`;
+}
 function loadRecords(){return JSON.parse(localStorage.getItem(KEY)||'[]')}
 function saveRecords(r){localStorage.setItem(KEY, JSON.stringify(r))}
 function loadUser(){return JSON.parse(localStorage.getItem(USER)||'{}')}
@@ -134,8 +141,8 @@ launchBtn.onclick=async ()=>{
     const u={...baseUser,attempt_id:startResult.attempt_id};
     saveUser(u);
     upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
-    const assessmentWindow=window.open('course.html','_blank');
-    if(!assessmentWindow){ location.href='course.html'; }
+    const assessmentWindow=window.open(withShare('course.html'),'_blank');
+    if(!assessmentWindow){ location.href=withShare('course.html'); }
   }catch(err){
     launchError.textContent=err?.message||'Unable to start assessment. Please try again.';
   }finally{
