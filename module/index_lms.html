@@ -136,11 +136,11 @@
 </body>
 <script src="html5/lib/scripts/bootstrapper.min.js"></script>
 <script>
-// Capture quiz answers via DOM click events and post to parent.
-// SCORM interactions are skipped in this module build (actTopGrCompleteAction cancel bug);
-// this click-capture approach is the reliable fallback.
+// Capture quiz answers via click events and post to parent.
+// Primary slide detection: GetPlayer().GetCurrentSlide() — avoids assuming
+// Storyline puts internal slide IDs in DOM element IDs (it doesn't).
 (function(){
-  // Slide element-ID fragment → quiz variable ID (built from grepping all 64 slide JS files)
+  // Internal slide ID → quiz variable ID (built from all 64 slide JS files)
   var SLIDE_MAP={
     "6D6lHejtOdz":"6MCBHcqGdug","69lVJT1f0QB":"6SU5leVeQsi","5dJy4aYxSDa":"65gar2uXnMJ",
     "6QfArJYa8kn":"68KaeOSsnS6","6kULAfOBBvD":"5e9jomKlHfP","6CjmNVS7dAB":"5ZOKBebxyW2",
@@ -166,57 +166,75 @@
     "5oxcmhuC8Zb":"63ill7FKLkC"
   };
 
-  // Walk up the DOM to find an ancestor whose element ID contains a known slide ID.
-  function findSlideId(el){
-    var seen=0;
-    while(el && seen++<20){
-      var id=el.id||'';
-      for(var sid in SLIDE_MAP){
-        if(id===sid || id.indexOf(sid)>=0) return sid;
+  var lastQuizVar=null;
+  var lastSlideRaw=null; // raw value from GetCurrentSlide(), for diagnostics
+
+  // Ask the Storyline player which slide is currently active.
+  function refreshCurrentSlide(){
+    try{
+      var player=typeof GetPlayer==='function'&&GetPlayer();
+      if(!player) return;
+      var raw=null;
+      if(typeof player.GetCurrentSlide==='function') raw=player.GetCurrentSlide();
+      if(raw!==lastSlideRaw){
+        lastSlideRaw=raw;
+        // raw may be the internal ID directly ("6D6lHejtOdz") or a scene.slide
+        // string ("2.3"). Try direct lookup first; SLIDE_MAP keys are the internal IDs.
+        var quizVar=raw&&SLIDE_MAP[raw]||null;
+        if(quizVar){
+          lastQuizVar=quizVar;
+          console.log('[QuizCapture] Slide →',raw,'quiz var →',quizVar);
+        } else {
+          lastQuizVar=null;
+          // Log to help debug: what did GetCurrentSlide() actually return?
+          console.log('[QuizCapture] Slide changed, no SLIDE_MAP match. raw=',JSON.stringify(raw));
+        }
       }
-      el=el.parentElement;
-    }
-    return null;
+    }catch(e){}
   }
 
-  // Read all currently selected/checked answer texts within the slide container.
-  function getSelectedText(slideEl){
-    var selected=slideEl.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
+  // Read ARIA-selected answer texts from the whole document (slide container unknown).
+  function getSelectedText(){
+    var selected=document.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
     var texts=[];
     selected.forEach(function(el){
       var t=(el.getAttribute('aria-label')||el.textContent||'').trim();
-      if(t) texts.push(t);
+      // Exclude very long strings (layout/nav elements) and empty strings.
+      if(t && t.length<300) texts.push(t);
     });
     return texts.join('[,]');
   }
 
+  // Poll slide changes every second so we always have the latest slide on click.
+  setInterval(refreshCurrentSlide, 1000);
+
   document.addEventListener('click', function(e){
     try{
-      var slideId=findSlideId(e.target);
-      if(!slideId) return;
-      var quizVar=SLIDE_MAP[slideId];
-      if(!quizVar) return;
-      // Find the slide container element to scope the ARIA selection query.
-      var slideEl=e.target;
-      while(slideEl && (slideEl.id||'').indexOf(slideId)<0 && slideEl.id!==slideId) slideEl=slideEl.parentElement;
-      if(!slideEl) slideEl=document.body;
+      refreshCurrentSlide(); // sync immediately on each click too
+      if(!lastQuizVar){
+        // Diagnostic: log ancestor IDs so we can see the DOM structure.
+        var el=e.target, ids=[], n=0;
+        while(el && n++<15){ if(el.id) ids.push(el.id); el=el.parentElement; }
+        if(ids.length) console.log('[QuizCapture] No slide match. Ancestor IDs:',ids.join(', '));
+        return;
+      }
+      var capturedQuizVar=lastQuizVar;
       var capturedTarget=e.target;
-      var capturedSlideEl=slideEl;
-      // Wait 150 ms for Storyline to update ARIA selection state, then read it.
+      // 150 ms delay lets Storyline update ARIA selection state before we read it.
       setTimeout(function(){
-        var txt=getSelectedText(capturedSlideEl);
+        var txt=getSelectedText();
         if(!txt) txt=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
-        if(txt){
+        if(txt && txt.length<300){
           var data={};
-          data['CurrentQuiz_'+quizVar]=txt;
+          data['CurrentQuiz_'+capturedQuizVar]=txt;
           try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
-          console.log('[QuizCapture]', quizVar, '=', txt);
+          console.log('[QuizCapture]',capturedQuizVar,'=',txt);
         }
-      }, 150);
+      },150);
     }catch(ex){}
-  }, true);
+  },true);
 
-  console.log('[QuizCapture] DOM click listener active, watching', Object.keys(SLIDE_MAP).length, 'slides');
+  console.log('[QuizCapture] click listener active, watching',Object.keys(SLIDE_MAP).length,'slides');
 })();
 </script>
 </html>
