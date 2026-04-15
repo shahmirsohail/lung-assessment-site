@@ -106,7 +106,7 @@ Because SCORM interactions never fire, a custom `[QuizCapture]` click-listener i
 
 3. **Secondary slide signal: `globalProvideData` intercept** — `window.globalProvideData(key, data)` is called by each slide's JS file when it executes (lazy-loading). Intercepting this catches slides loaded before DS initialises.
 
-4. **Click listener** — `document.addEventListener('click', ..., true)` fires on every click. Reads `lastQuizVar` (set by step 1/3), then waits 150 ms for Storyline to update aria state, then calls `getSelectedText()`.
+4. **Pointer listener** — `document.addEventListener('pointerdown', ..., true)` fires on every pointer press (capture phase). Storyline answer radio buttons dispatch `pointerdown` but **NOT** `click` — using `click` misses them entirely. NEXT/BACK navigation buttons dispatch both events. The handler waits **400 ms** for Storyline to update aria states (aria-checked/pressed are set on click/mouseup, which follows pointerdown within ~100–200 ms). NAV_RE is applied to BOTH `getSelectedText()` AND the fallback `capturedTarget.textContent` so NEXT presses are silently ignored even when aria scanning returns nothing.
 
 5. **`getSelectedText()`** — Queries `[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]` **scoped to `#slide-window`** and filtered through a nav-label exclusion regex. Two layers are needed:
    - **Scoping to `#slide-window`**: excludes outer player controls (play/pause, Menu button) that live in the player chrome and carry `aria-pressed="true"`

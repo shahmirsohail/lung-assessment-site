@@ -305,33 +305,43 @@
   // Diagnostic poll: logs slide signals only — does NOT update lastQuizVar.
   setInterval(refreshCurrentSlide,1000);
 
-  document.addEventListener('click',function(e){
+  // Storyline answer buttons (radio/checkbox) dispatch pointerdown but NOT click.
+  // NEXT/BACK navigation buttons dispatch both. Using 'pointerdown' captures both.
+  // NAV_RE is applied to both getSelectedText() and the fallback so NEXT presses are silently ignored.
+  var NAV_RE_OUTER=/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$/i;
+  document.addEventListener('pointerdown',function(e){
     try{
       var capturedQuizVar=lastQuizVar;
       var capturedTarget=e.target;
       if(!capturedQuizVar){
         var el=e.target,ids=[],n=0;
         while(el&&n++<15){if(el.id)ids.push(el.id);el=el.parentElement;}
-        // Only log for clicks inside the slide area (not nav/outline)
+        // Only log for interactions inside the slide area (not nav/outline)
         if(ids.indexOf('slide-window')>=0||ids.indexOf('slide')>=0){
           var s=getSlideSignals();
-          console.log('[QuizCapture] Answer click — no quiz var'
+          console.log('[QuizCapture] Answer interaction — no quiz var'
             +' | Ancestor IDs:',ids.join(', ')
             ,'| hash:',JSON.stringify(s.hash)
             ,'| history.state:',JSON.stringify(s.histState));
         }
         return;
       }
+      // Wait 400 ms for Storyline to update aria states (aria-checked/pressed are set on click/mouseup,
+      // which follows pointerdown within ~100–200 ms for a normal press).
       setTimeout(function(){
         var txt=getSelectedText();
-        if(!txt) txt=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
+        if(!txt){
+          // Fallback: use the pressed element's own label — also exclude nav labels.
+          var raw=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
+          if(raw&&!NAV_RE_OUTER.test(raw)) txt=raw;
+        }
         if(txt&&txt.length<300){
           var data={};
           data['CurrentQuiz_'+capturedQuizVar]=txt;
           try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
           console.log('[QuizCapture]',capturedQuizVar,'=',txt);
         }
-      },150);
+      },400);
     }catch(ex){}
   },true);
 
