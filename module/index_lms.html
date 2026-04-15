@@ -305,10 +305,72 @@
   // Diagnostic poll: logs slide signals only — does NOT update lastQuizVar.
   setInterval(refreshCurrentSlide,1000);
 
-  // Storyline answer buttons (radio/checkbox) dispatch pointerdown but NOT click.
-  // NEXT/BACK navigation buttons dispatch both. Using 'pointerdown' captures both.
-  // NAV_RE is applied to both getSelectedText() and the fallback so NEXT presses are silently ignored.
-  var NAV_RE_OUTER=/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$/i;
+  // ── PRIMARY: MutationObserver ─────────────────────────────────────────────
+  // Storyline answer buttons update aria-checked/pressed/selected when selected.
+  // MutationObserver is event-type agnostic — fires regardless of how the change
+  // was triggered (touch, mouse, pointer, keyboard). This is more reliable than
+  // any event listener approach for Storyline's custom elements.
+  var _navRE=/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$/i;
+  var _moDebounce=null;
+  var _moQuizVar=null;
+  function _flushCapture(){
+    _moDebounce=null;
+    var qv=_moQuizVar; _moQuizVar=null;
+    if(!qv) return;
+    var txt=getSelectedText();
+    if(txt){
+      var data={};
+      data['CurrentQuiz_'+qv]=txt;
+      try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
+      console.log('[QuizCapture]',qv,'=',txt);
+    }
+  }
+  var _mo=new MutationObserver(function(mutations){
+    var relevant=false;
+    for(var i=0;i<mutations.length;i++){
+      var m=mutations[i];
+      if(m.type==='attributes'){
+        var val=m.target.getAttribute(m.attributeName);
+        if(val==='true') relevant=true;
+      }
+    }
+    if(!relevant||!lastQuizVar) return;
+    // Latch the quiz var at first mutation; debounce 300 ms for Storyline to settle all states.
+    if(!_moDebounce) _moQuizVar=lastQuizVar;
+    clearTimeout(_moDebounce);
+    _moDebounce=setTimeout(_flushCapture,300);
+  });
+  _mo.observe(document.body,{
+    attributes:true,
+    attributeFilter:['aria-checked','aria-pressed','aria-selected'],
+    subtree:true
+  });
+
+  // ── SECONDARY: change event for native <input> elements ───────────────────
+  document.addEventListener('change',function(e){
+    try{
+      if(!lastQuizVar) return;
+      var el=e.target;
+      if(el.tagName!=='INPUT') return;
+      // MutationObserver should have already caught this; fire only as backup.
+      if(_moDebounce) return;
+      var txt=getSelectedText();
+      if(!txt){
+        var raw=(el.getAttribute('aria-label')||el.value||'').trim();
+        if(raw&&!_navRE.test(raw)) txt=raw;
+      }
+      if(txt&&txt.length<300){
+        var data={};
+        data['CurrentQuiz_'+lastQuizVar]=txt;
+        try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
+        console.log('[QuizCapture][change]',lastQuizVar,'=',txt);
+      }
+    }catch(ex){}
+  },true);
+
+  // ── TERTIARY: pointerdown fallback ────────────────────────────────────────
+  // Kept as a last resort for elements that don't emit aria changes.
+  // NAV_RE exclusion prevents NEXT/BACK captures.
   document.addEventListener('pointerdown',function(e){
     try{
       var capturedQuizVar=lastQuizVar;
@@ -316,32 +378,32 @@
       if(!capturedQuizVar){
         var el=e.target,ids=[],n=0;
         while(el&&n++<15){if(el.id)ids.push(el.id);el=el.parentElement;}
-        // Only log for interactions inside the slide area (not nav/outline)
         if(ids.indexOf('slide-window')>=0||ids.indexOf('slide')>=0){
           var s=getSlideSignals();
-          console.log('[QuizCapture] Answer interaction — no quiz var'
+          console.log('[QuizCapture] Interaction — no quiz var'
             +' | Ancestor IDs:',ids.join(', ')
             ,'| hash:',JSON.stringify(s.hash)
             ,'| history.state:',JSON.stringify(s.histState));
         }
         return;
       }
-      // Wait 400 ms for Storyline to update aria states (aria-checked/pressed are set on click/mouseup,
-      // which follows pointerdown within ~100–200 ms for a normal press).
+      // Wait 500 ms — longer than MutationObserver debounce so MO fires first.
+      // If MO already sent the capture, txt will be non-empty and we skip.
       setTimeout(function(){
+        // If MutationObserver already fired and dispatched, skip duplicate.
+        if(_moDebounce!==null) return;
         var txt=getSelectedText();
         if(!txt){
-          // Fallback: use the pressed element's own label — also exclude nav labels.
           var raw=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
-          if(raw&&!NAV_RE_OUTER.test(raw)) txt=raw;
+          if(raw&&!_navRE.test(raw)) txt=raw;
         }
         if(txt&&txt.length<300){
           var data={};
           data['CurrentQuiz_'+capturedQuizVar]=txt;
           try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
-          console.log('[QuizCapture]',capturedQuizVar,'=',txt);
+          console.log('[QuizCapture][pd]',capturedQuizVar,'=',txt);
         }
-      },400);
+      },500);
     }catch(ex){}
   },true);
 
