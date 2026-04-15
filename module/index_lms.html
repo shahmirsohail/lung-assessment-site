@@ -236,7 +236,11 @@
   }
 
   function getSelectedText(){
-    var selected=document.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
+    // Scope to #slide-window (quiz content area) to exclude Storyline player controls
+    // (play/pause button, Menu button, etc.) which also carry aria-pressed="true" and
+    // would otherwise pollute the captured answer with values like "play/pause[,]Menu".
+    var container=document.getElementById('slide-window')||document.getElementById('slide')||document;
+    var selected=container.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
     var texts=[];
     selected.forEach(function(el){
       var t=(el.getAttribute('aria-label')||el.textContent||'').trim();

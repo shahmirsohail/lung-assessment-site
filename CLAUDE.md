@@ -87,6 +87,45 @@ The `CASE_SLIDE_MAP` in `course.html` maps these IDs to human-readable labels:
 - `player.GetVar('CurrentQuiz_*')` — these are internal Storyline quiz-engine variables; they are **not accessible** via the external `GetVar()` API
 - `player.GetVar('CapturedResponsesJson')` — this variable is never written to by any slide trigger in this module
 - `window.API` on `story.html` — `story.html` has `lmsPresent: false` hardcoded; it never calls the SCORM API regardless of whether `window.API` is present
+- **SCORM `cmi.interactions.*` do NOT fire for this module** — The Storyline module uses custom navigation buttons rather than standard quiz-submit actions, so `scormdriver.js` never calls `SCORM_RecordInteraction*()`. No `[SCORM]` logs appear in the parent console and `cmi.interactions._count` stays 0. The QuizCapture fallback (see below) is the only data-capture mechanism.
+- `player.GetCurrentSlide()` — **not available** in this Storyline version. `GetPlayer()` only exposes `GetVar` and `SetVar`. Any code relying on `GetCurrentSlide()` will always get `null`.
+
+## QuizCapture fallback (module/index_lms.html)
+
+Because SCORM interactions never fire, a custom `[QuizCapture]` click-listener is injected at the bottom of `module/index_lms.html`. It is the **sole** capture mechanism.
+
+### How it works
+
+1. **Slide detection via `DS.pubSub`** — Subscribes to `DS.pubSub.on(DS.events.slide.HAS_MOUNTED, cb)`. Storyline's internal pub/sub fires this event on every slide transition (confirmed from `frame.desktop.min.js`: `u.on(d.slide.HAS_MOUNTED, n.onSlideChange)`). The callback receives the slide view; `slideView.props.model.get('id')` returns the Storyline slide ID (e.g. `69lVJT1f0QB`).
+
+2. **`SLIDE_MAP` in `index_lms.html`** maps Storyline slide IDs → quiz-variable IDs:
+   ```javascript
+   { "69lVJT1f0QB": "6SU5leVeQsi", ... }  // slide ID → quiz var ID
+   ```
+   This is separate from `CASE_SLIDE_MAP` in `course.html` which maps quiz var IDs → human labels.
+
+3. **Secondary slide signal: `globalProvideData` intercept** — `window.globalProvideData(key, data)` is called by each slide's JS file when it executes (lazy-loading). Intercepting this catches slides loaded before DS initialises.
+
+4. **Click listener** — `document.addEventListener('click', ..., true)` fires on every click. Reads `lastQuizVar` (set by step 1/3), then waits 150 ms for Storyline to update aria state, then calls `getSelectedText()`.
+
+5. **`getSelectedText()`** — Queries `[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]` **scoped to `#slide-window`** (NOT the whole document). Scoping is critical: Storyline's player controls (play/pause, Menu button) also carry `aria-pressed="true"` and will pollute the result with values like `"play/pause[,]Menu"` if the query runs on `document`.
+
+6. **postMessage to parent** — Sends `{ type: 'sl_quiz_vars', data: { 'CurrentQuiz_<id>': 'Answer text' } }` to `course.html`, which stores it in `quizVarData` and merges it in `getAssessmentResponses()`.
+
+### DS.pubSub setup timing
+
+`DS` is initialised as `{}` at page load; `pubSub` and `events` are populated asynchronously by `bootstrapper.min.js` loading `slides.min.js`. The setup function retries every 200 ms (up to 30 times / 6 s) until `DS.pubSub` and `DS.events.slide.HAS_MOUNTED` are available.
+
+### Critical gotcha: `refreshCurrentSlide()` must NOT set `lastQuizVar`
+
+The diagnostic polling function `refreshCurrentSlide()` reads `GetCurrentSlide()` (which is always null) and must **not** assign `lastQuizVar = null` — that would overwrite the correct value set by the DS.pubSub listener on every 1-second tick and on every click. The function is kept for diagnostic logging only.
+
+### Console signals to verify capture is working (iframe DevTools context)
+
+- `[QuizCapture] DS.pubSub listener registered` — DS initialised in time
+- `[QuizCapture] Slide mounted → quiz var: <id> (slideId: <sid>)` — correct slide detected
+- `[QuizCapture] <quizVarId> = <answer text>` — answer successfully captured
+- `[QuizCapture] Answer click — no quiz var` — slide not recognised (check SLIDE_MAP)
 
 ## Module question types and answer values
 
