@@ -8,10 +8,19 @@
     margin: 0; background: #f4f6f9; color: #1a1a2e; line-height: 1.6;
   }
   header {
-    background: #0b3d91; color: #fff; padding: 20px 32px;
+    background: #0b3d91; color: #fff; padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
   }
-  header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
-  header p { margin: 4px 0 0; font-size: 14px; opacity: 0.8; }
+  .header-left h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
+  .header-left p { margin: 2px 0 0; font-size: 13px; opacity: 0.75; }
+  .btn-ghost {
+    padding: 8px 18px; font-size: 14px; font-weight: 600;
+    background: transparent; color: rgba(255,255,255,0.9);
+    border: 1.5px solid rgba(255,255,255,0.45); border-radius: 6px;
+    cursor: pointer; transition: background .15s, color .15s;
+    white-space: nowrap; text-decoration: none; display: inline-block; line-height: 1.5;
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.12); color: #fff; }
   main { max-width: 860px; margin: 36px auto; padding: 0 20px 60px; }
   .card {
     background: #fff; border-radius: 10px; padding: 28px 32px;
@@ -56,14 +65,13 @@
   }
   .badge-green { background: #d4f5e2; color: #1a7a4a; }
   .badge-grey  { background: #eaeaea; color: #666; }
-  /* Footer admin link */
-  .footer-link { text-align: center; margin-top: 8px; }
-  .footer-link a { font-size: 13px; color: #888; text-decoration: none; border-bottom: 1px dotted #bbb; }
-  .footer-link a:hover { color: #0b3d91; border-color: #0b3d91; }
 </style></head>
 <body>
 <header>
-  <h1>Lung Ultrasound Assessment</h1>
+  <div class="header-left">
+    <h1>Lung Ultrasound Assessment</h1>
+  </div>
+  <a id="adminLink" href="#" class="btn-ghost">Admin dashboard</a>
 </header>
 <main>
   <div class="card">
@@ -86,9 +94,7 @@
     <div id="records"></div>
   </div>
 </main>
-<div class="footer-link">
-  <a id="adminLink" href="#">Admin dashboard</a>
-</div>
+
 
 <script>
 const KEY='lungAssessmentLocalRecords';
