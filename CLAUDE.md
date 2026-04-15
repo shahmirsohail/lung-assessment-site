@@ -20,7 +20,7 @@ api/                — Vercel serverless functions (Node.js)
 |---|---|
 | `POST /api/attempt/start` | Creates attempt in Supabase, returns `attempt_id` |
 | `POST /api/attempt/progress` | Upserts in-progress data (called every 30 s) |
-| `POST /api/attempt/complete` | Marks completed, sends emails, merges responses |
+| `POST /api/attempt/complete` | Marks completed, sends emails, merges responses. Returns `{ ok, attempt_id, attempt }` where `attempt` is the full merged server record. `course.html`'s `touch()` uses this to overwrite localStorage with authoritative data after successful completion, ensuring the CSV always reflects what the server stored. |
 | `GET /api/admin/attempts` | Lists all attempts (admin) |
 | `POST /api/admin/resend` | Re-sends result emails for an attempt |
 
@@ -76,11 +76,30 @@ The `CASE_SLIDE_MAP` in `course.html` maps these IDs to human-readable labels:
 
 `transformResponseKeys()` handles both bare IDs and `CurrentQuiz_<ID>` prefixed forms.
 
+**`CASE_SLIDE_MAP` is complete** — all 64 quiz IDs are mapped (as of PR #52). The map previously had only 49 entries; 15 were missing (certain Cases 1–14 Normal or Abnormal and Confidence Level questions), causing those responses to appear in the CSV under raw SCORM IDs instead of readable column names. If the Storyline module is ever republished, re-audit by extracting all `CurrentQuiz_*` IDs from `data.js` and verifying each appears in the map.
+
+### SCORM debug logging
+
+`LMSSetValue` in `course.html` logs `[SCORM] <key> = <val>` to the browser console for all `cmi.interactions.*` keys. Open DevTools → Console while answering questions to verify data is being captured and see exact response values in real time.
+
 ### What does NOT work (and why)
 
 - `player.GetVar('CurrentQuiz_*')` — these are internal Storyline quiz-engine variables; they are **not accessible** via the external `GetVar()` API
 - `player.GetVar('CapturedResponsesJson')` — this variable is never written to by any slide trigger in this module
 - `window.API` on `story.html` — `story.html` has `lmsPresent: false` hardcoded; it never calls the SCORM API regardless of whether `window.API` is present
+
+## Module question types and answer values
+
+Each of the 16 cases has exactly 4 questions (64 total):
+
+| # | Question | Answer choices |
+|---|---|---|
+| 1 | Normal or Abnormal | `Normal` / `Abnormal` |
+| 2 | Primary Pathology | `Normal` / `Pleural Effusion` / `Pneumothorax` / `Alveolar Syndrome` / `Interstitial Syndrome` |
+| 3 | Secondary Pathology | Multi-select grid — student picks a location for each pathology. SCORM stores this as a `[,]`-delimited string of selected button texts, e.g. `"Pleural Effusion Right[,]Alveolar Syndrome RUQ"`. Location choices: `Not present` / `Right` / `Left` / `RUQ` / `RLQ` / `LUQ` / `LLQ` |
+| 4 | Confidence Level | `Not at all confident` / `Slightly Confident` / `Moderately Confident` / `Very Confident` / `Completely Confident` |
+
+Answer text values come directly from Storyline button labels — no additional mapping is needed. Secondary Pathology is the only multi-value column in the CSV.
 
 ## Storyline module structure
 
