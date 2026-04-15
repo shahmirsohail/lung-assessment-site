@@ -245,6 +245,16 @@
     var texts=[];
     selected.forEach(function(el){
       var t=(el.getAttribute('aria-label')||el.textContent||'').trim();
+      if(!t){
+        // SVG path targets have no text — walk up to find slide-object-vectorshape div
+        var anc=el.parentElement,n=0;
+        while(anc&&n++<15){
+          if(anc.classList&&anc.classList.contains('slide-object-vectorshape')){
+            t=(anc.textContent||'').trim();if(t)break;
+          }
+          anc=anc.parentElement;
+        }
+      }
       if(t&&t.length<300&&!NAV_RE.test(t)) texts.push(t);
     });
     return texts.join('[,]');
@@ -334,9 +344,18 @@
         if(val==='true') relevant=true;
       }
     }
-    if(!relevant||!lastQuizVar) return;
+    if(!relevant) return;
+    // Bug 1 fix: derive quiz var from active slide's CSS class if DS.pubSub didn't fire
+    var _activeQv=lastQuizVar;
+    if(!_activeQv){
+      try{
+        var _as=document.querySelector('#slide-window [class*="cs-"],.slide-container [class*="cs-"]');
+        if(_as){var _cm=_as.className.match(/cs-([A-Za-z0-9]{10,13})/);if(_cm)_activeQv=SLIDE_MAP[_cm[1]]||null;}
+      }catch(ex){}
+    }
+    if(!_activeQv) return;
     // Latch the quiz var at first mutation; debounce 300 ms for Storyline to settle all states.
-    if(!_moDebounce) _moQuizVar=lastQuizVar;
+    if(!_moDebounce) _moQuizVar=_activeQv;
     clearTimeout(_moDebounce);
     _moDebounce=setTimeout(_flushCapture,300);
   });
