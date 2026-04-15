@@ -170,6 +170,22 @@ function getAssessmentResponses(){
     const player=frame?.contentWindow?.GetPlayer?.();
     captureDebug.player_found=Boolean(player);
     if(player && captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
+    if(player){
+      // Supplemental GetVar poll: reads CurrentQuiz_* variables directly from the Storyline player.
+      // These variables are only written when Storyline quiz actions fire; with navigation button sets
+      // they remain empty. This is here for completeness and future-proofing.
+      let getVarHits=0;
+      for(const id of Object.keys(CASE_SLIDE_MAP)){
+        try{
+          const val=player.GetVar('CurrentQuiz_'+id);
+          if(val!==null && val!==undefined && val!==''){
+            if(!responses[id] && !responses['CurrentQuiz_'+id]) responses[id]=val;
+            getVarHits++;
+          }
+        }catch(e){}
+      }
+      captureDebug.getvar_hits=getVarHits;
+    }
   }catch(e){setCaptureError('player_exception',e);}
   // Merge postMessage quiz var data as fallback (SCORM interactions take precedence if both present).
   const merged={...quizVarData,...responses};
