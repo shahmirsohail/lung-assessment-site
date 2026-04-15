@@ -315,11 +315,11 @@
   // Diagnostic poll: logs slide signals only — does NOT update lastQuizVar.
   setInterval(refreshCurrentSlide,1000);
 
-  // ── PRIMARY: MutationObserver ─────────────────────────────────────────────
-  // Storyline answer buttons update aria-checked/pressed/selected when selected.
-  // MutationObserver is event-type agnostic — fires regardless of how the change
-  // was triggered (touch, mouse, pointer, keyboard). This is more reliable than
-  // any event listener approach for Storyline's custom elements.
+  // ── MutationObserver (supplemental) ──────────────────────────────────────
+  // Fires if Storyline ever sets aria-checked/pressed/selected on an answer element.
+  // NOTE: This module's answer buttons do NOT update aria attributes when clicked
+  // (confirmed via Playwright instrumentation). The pointerdown handler below is the
+  // primary capture mechanism. This MO is kept for future-proofing only.
   var _navRE=/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$/i;
   var _moDebounce=null;
   var _moQuizVar=null;
@@ -345,7 +345,7 @@
       }
     }
     if(!relevant) return;
-    // Bug 1 fix: derive quiz var from active slide's CSS class if DS.pubSub didn't fire
+    // Derive quiz var: prefer DS.pubSub-set lastQuizVar; fall back to active slide CSS class.
     var _activeQv=lastQuizVar;
     if(!_activeQv){
       try{
@@ -354,7 +354,6 @@
       }catch(ex){}
     }
     if(!_activeQv) return;
-    // Latch the quiz var at first mutation; debounce 300 ms for Storyline to settle all states.
     if(!_moDebounce) _moQuizVar=_activeQv;
     clearTimeout(_moDebounce);
     _moDebounce=setTimeout(_flushCapture,300);
@@ -365,17 +364,29 @@
     subtree:true
   });
 
+  // Helper: traverse up the ancestor tree (up to maxLevels) to find the nearest
+  // element with a non-empty, non-nav text label.
+  function _getAncestorText(el,maxLevels){
+    var n=0;
+    while(el&&n++<maxLevels){
+      var t=(el.getAttribute('aria-label')||el.getAttribute('data-acc-text')||el.textContent||'').trim();
+      if(t&&t.length>0&&t.length<300&&!_navRE.test(t)) return t;
+      el=el.parentElement;
+    }
+    return '';
+  }
+
   // ── SECONDARY: change event for native <input> elements ───────────────────
   document.addEventListener('change',function(e){
     try{
       if(!lastQuizVar) return;
       var el=e.target;
       if(el.tagName!=='INPUT') return;
-      // MutationObserver should have already caught this; fire only as backup.
-      if(_moDebounce) return;
       var txt=getSelectedText();
       if(!txt){
         var raw=(el.getAttribute('aria-label')||el.value||'').trim();
+        // If input itself has no useful text, traverse ancestors (e.g. hidden radio inside a labelled button)
+        if(!raw||_navRE.test(raw)) raw=_getAncestorText(el.parentElement,10);
         if(raw&&!_navRE.test(raw)) txt=raw;
       }
       if(txt&&txt.length<300){
@@ -387,9 +398,20 @@
     }catch(ex){}
   },true);
 
-  // ── TERTIARY: pointerdown fallback ────────────────────────────────────────
-  // Kept as a last resort for elements that don't emit aria changes.
-  // NAV_RE exclusion prevents NEXT/BACK captures.
+  // ── PRIMARY: pointerdown capture ──────────────────────────────────────────
+  // This is the main capture path. Storyline answer buttons in this module do NOT
+  // update aria attributes, so the MO above never fires for answers. Instead we
+  // capture the clicked element's text directly on every pointerdown inside the
+  // slide window while a quiz slide is active.
+  //
+  // Two bugs fixed vs previous version:
+  //  1. Removed `if(_moDebounce!==null) return` — MO fires for unrelated elements
+  //     (e.g. NEXT button aria-pressed), which used to block this fallback.
+  //  2. Use _getAncestorText() instead of only e.target.textContent — the actual
+  //     click target may be a hidden <input type="radio"> or inner span with no text;
+  //     traversing up finds the surrounding labelled button.
+  //  3. Timeout reduced 500→200 ms (fast enough to capture before NEXT is pressed;
+  //     MO no longer needs to run first since we skip the _moDebounce gate).
   document.addEventListener('pointerdown',function(e){
     try{
       var capturedQuizVar=lastQuizVar;
@@ -406,23 +428,20 @@
         }
         return;
       }
-      // Wait 500 ms — longer than MutationObserver debounce so MO fires first.
-      // If MO already sent the capture, txt will be non-empty and we skip.
+      // Wait 200 ms for Storyline to settle (keeps duplicate-capture risk low while
+      // still firing well before the user can navigate away). Do NOT gate on
+      // _moDebounce — the MO may have fired for a non-answer element (e.g. NEXT
+      // button aria-pressed change) and set the debounce, which would skip this.
       setTimeout(function(){
-        // If MutationObserver already fired and dispatched, skip duplicate.
-        if(_moDebounce!==null) return;
         var txt=getSelectedText();
-        if(!txt){
-          var raw=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
-          if(raw&&!_navRE.test(raw)) txt=raw;
-        }
+        if(!txt) txt=_getAncestorText(capturedTarget,10);
         if(txt&&txt.length<300){
           var data={};
           data['CurrentQuiz_'+capturedQuizVar]=txt;
           try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
           console.log('[QuizCapture][pd]',capturedQuizVar,'=',txt);
         }
-      },500);
+      },200);
     }catch(ex){}
   },true);
 
