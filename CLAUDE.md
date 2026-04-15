@@ -88,6 +88,8 @@ The `CASE_SLIDE_MAP` in `course.html` maps these IDs to human-readable labels:
 - `player.GetVar('CapturedResponsesJson')` — this variable is never written to by any slide trigger in this module
 - `window.API` on `story.html` — `story.html` has `lmsPresent: false` hardcoded; it never calls the SCORM API regardless of whether `window.API` is present
 - **SCORM `cmi.interactions.*` do NOT fire for this module** — The Storyline module uses custom navigation buttons rather than standard quiz-submit actions, so `scormdriver.js` never calls `SCORM_RecordInteraction*()`. No `[SCORM]` logs appear in the parent console and `cmi.interactions._count` stays 0. The QuizCapture fallback (see below) is the only data-capture mechanism.
+- **MutationObserver never fires for quiz answers** — This module does not set `aria-checked`, `aria-pressed`, or `aria-selected` on answer buttons. The MO watching for these attribute changes on `#slide-window` will never trigger for quiz selections. Do not rely on MO firing to confirm a selection. The `_getAncestorText()` pointerdown path is the only extraction that works.
+- **`globalProvideData` intercept is a no-op** — Always called with key `'slide'`, never with slide IDs. The intercept designed to map slide IDs to `lastQuizVar` via `globalProvideData` never matches. Only DS.pubSub reliably sets `lastQuizVar`.
 - `player.GetCurrentSlide()` — **not available** in this Storyline version. `GetPlayer()` only exposes `GetVar` and `SetVar`. Any code relying on `GetCurrentSlide()` will always get `null`.
 
 ## QuizCapture fallback (module/index_lms.html)
@@ -104,13 +106,17 @@ Because SCORM interactions never fire, a custom `[QuizCapture]` click-listener i
    ```
    This is separate from `CASE_SLIDE_MAP` in `course.html` which maps quiz var IDs → human labels.
 
-3. **Secondary slide signal: `globalProvideData` intercept** — `window.globalProvideData(key, data)` is called by each slide's JS file when it executes (lazy-loading). Intercepting this catches slides loaded before DS initialises.
+3. **Secondary slide signal: `globalProvideData` intercept** — ~~`window.globalProvideData(key, data)` is called by each slide's JS file when it executes~~. **This intercept is non-functional.** Storyline always calls `globalProvideData('slide', data)` with the literal key `'slide'`, never with slide IDs. The intercept was designed to match slide IDs as keys, so it never matches anything. DS.pubSub is the only working slide-detection mechanism.
 
-4. **Pointer listener** — `document.addEventListener('pointerdown', ..., true)` fires on every pointer press (capture phase). Storyline answer radio buttons dispatch `pointerdown` but **NOT** `click` — using `click` misses them entirely. NEXT/BACK navigation buttons dispatch both events. The handler waits **400 ms** for Storyline to update aria states (aria-checked/pressed are set on click/mouseup, which follows pointerdown within ~100–200 ms). NAV_RE is applied to BOTH `getSelectedText()` AND the fallback `capturedTarget.textContent` so NEXT presses are silently ignored even when aria scanning returns nothing.
+4. **Pointer listener** — `document.addEventListener('pointerdown', ..., true)` fires on every pointer press (capture phase). Storyline answer radio buttons dispatch `pointerdown` but **NOT** `click` — using `click` misses them entirely. NEXT/BACK navigation buttons dispatch both events. The handler waits **200 ms** for Storyline to settle, then calls `getSelectedText()` first; if that returns nothing, falls back to `_getAncestorText(capturedTarget, 10)`.
 
-5. **`getSelectedText()`** — Queries `[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]` **scoped to `#slide-window`** and filtered through a nav-label exclusion regex. Two layers are needed:
+   **Critical discovery (PR #67):** Storyline does **NOT** set `aria-checked`, `aria-pressed`, or `aria-selected` on answer radio buttons in this module — they remain unset regardless of which answer is selected. This means `getSelectedText()` always returns empty for quiz answers. The `_getAncestorText()` DOM-ancestor traversal is the **only** path that extracts answer text. The MutationObserver (which watches for aria attribute changes) also never fires for this reason.
+
+   **Previous bug:** The pointerdown handler had a gate `if (_moDebounce !== null) return` — since MO never fires, `_moDebounce` was always `null` and the gate always blocked. Removing this gate was required for any capture to work.
+
+5. **`getSelectedText()`** — Queries `[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]` **scoped to `#slide-window`** and filtered through a nav-label exclusion regex. In practice this always returns empty for quiz answers (see point 4 above). Two layers of filtering remain important for the `_getAncestorText()` fallback path:
    - **Scoping to `#slide-window`**: excludes outer player controls (play/pause, Menu button) that live in the player chrome and carry `aria-pressed="true"`
-   - **Nav-label regex** `/^(next|back|previous|...)$/i`: excludes NEXT/BACK navigation buttons that Storyline renders **inside** `#slide-window` as part of the slide content, also with `aria-pressed="true"`. Without this filter, answers read as `"NEXT"` instead of the selected choice.
+   - **Nav-label regex** `/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$|navigation/i`: excludes NEXT/BACK navigation buttons inside `#slide-window`. The `|navigation` substring match is critical — the NEXT button's **parent container** carries `aria-label="slide navigation"`, which an exact-match-only regex would miss, causing that string to overwrite the real answer in `quizVarData`. Any string containing "navigation" is excluded.
 
 6. **postMessage to parent** — Sends `{ type: 'sl_quiz_vars', data: { 'CurrentQuiz_<id>': 'Answer text' } }` to `course.html`, which stores it in `quizVarData` and merges it in `getAssessmentResponses()`.
 
@@ -122,12 +128,32 @@ Because SCORM interactions never fire, a custom `[QuizCapture]` click-listener i
 
 The diagnostic polling function `refreshCurrentSlide()` reads `GetCurrentSlide()` (which is always null) and must **not** assign `lastQuizVar = null` — that would overwrite the correct value set by the DS.pubSub listener on every 1-second tick and on every click. The function is kept for diagnostic logging only.
 
+### `_getAncestorText()` helper
+
+Walks up the DOM from the clicked element (up to `maxLevels` ancestors), returning the first non-empty, non-nav string found in `aria-label`, `data-acc-text`, or `textContent`. Used as the primary answer-extraction path since aria states are never set on answer buttons.
+
+```javascript
+function _getAncestorText(el, maxLevels) {
+  var n = 0;
+  while (el && n++ < maxLevels) {
+    var t = (el.getAttribute('aria-label') || el.getAttribute('data-acc-text') || el.textContent || '').trim();
+    if (t && t.length > 0 && t.length < 300 && !_navRE.test(t)) return t;
+    el = el.parentElement;
+  }
+  return '';
+}
+```
+
+The `_navRE` pattern `/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$|navigation/i` filters both exact nav-button labels and any string containing "navigation" (e.g. the NEXT button's parent container `aria-label="slide navigation"`).
+
 ### Console signals to verify capture is working (iframe DevTools context)
 
 - `[QuizCapture] DS.pubSub listener registered` — DS initialised in time
 - `[QuizCapture] Slide mounted → quiz var: <id> (slideId: <sid>)` — correct slide detected
-- `[QuizCapture] <quizVarId> = <answer text>` — answer successfully captured
+- `[QuizCapture][pd] <quizVarId> = <answer text>` — answer captured via pointerdown + ancestor traversal
 - `[QuizCapture] Answer click — no quiz var` — slide not recognised (check SLIDE_MAP)
+
+**If you see `[pd]` lines with "slide navigation" as the answer text**, NAV_RE is not filtering the NEXT button's parent container — verify `|navigation` is in the pattern at both the closure-level `_navRE` variable and the local `NAV_RE` inside `getSelectedText()`.
 
 ## Module question types and answer values
 
