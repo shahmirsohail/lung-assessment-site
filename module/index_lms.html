@@ -136,11 +136,10 @@
 </body>
 <script src="html5/lib/scripts/bootstrapper.min.js"></script>
 <script>
-// Capture quiz answers via click events and post to parent.
-// Primary slide detection: GetPlayer().GetCurrentSlide() — avoids assuming
-// Storyline puts internal slide IDs in DOM element IDs (it doesn't).
+// Diagnostic: identify which slide signal works for quiz slide detection.
+// Three signals are probed: GetPlayer().GetCurrentSlide(), cmi.core.lesson_location,
+// and attributes on the #slide DOM element.
 (function(){
-  // Internal slide ID → quiz variable ID (built from all 64 slide JS files)
   var SLIDE_MAP={
     "6D6lHejtOdz":"6MCBHcqGdug","69lVJT1f0QB":"6SU5leVeQsi","5dJy4aYxSDa":"65gar2uXnMJ",
     "6QfArJYa8kn":"68KaeOSsnS6","6kULAfOBBvD":"5e9jomKlHfP","6CjmNVS7dAB":"5ZOKBebxyW2",
@@ -167,64 +166,92 @@
   };
 
   var lastQuizVar=null;
-  var lastSlideRaw=null; // raw value from GetCurrentSlide(), for diagnostics
+  var lastDiagKey='';
 
-  // Ask the Storyline player which slide is currently active.
-  function refreshCurrentSlide(){
+  function getSlideSignals(){
+    var signals={gcSlide:null,lessonLoc:null,slideAttrs:{},slideText:''};
+    // Signal 1: GetPlayer().GetCurrentSlide()
     try{
       var player=typeof GetPlayer==='function'&&GetPlayer();
-      if(!player) return;
-      var raw=null;
-      if(typeof player.GetCurrentSlide==='function') raw=player.GetCurrentSlide();
-      if(raw!==lastSlideRaw){
-        lastSlideRaw=raw;
-        // raw may be the internal ID directly ("6D6lHejtOdz") or a scene.slide
-        // string ("2.3"). Try direct lookup first; SLIDE_MAP keys are the internal IDs.
-        var quizVar=raw&&SLIDE_MAP[raw]||null;
-        if(quizVar){
-          lastQuizVar=quizVar;
-          console.log('[QuizCapture] Slide →',raw,'quiz var →',quizVar);
-        } else {
-          lastQuizVar=null;
-          // Log to help debug: what did GetCurrentSlide() actually return?
-          console.log('[QuizCapture] Slide changed, no SLIDE_MAP match. raw=',JSON.stringify(raw));
+      if(player){
+        if(!window._qcMethodsDumped){
+          window._qcMethodsDumped=true;
+          var methods=[];
+          for(var k in player){try{if(typeof player[k]==='function')methods.push(k);}catch(e){}}
+          console.log('[QuizCapture] GetPlayer() methods:',methods.join(', ')||'(none found)');
         }
+        if(typeof player.GetCurrentSlide==='function') signals.gcSlide=player.GetCurrentSlide();
       }
+    }catch(e){}
+    // Signal 2: cmi.core.lesson_location from parent SCORM API
+    try{
+      var api=window.parent&&window.parent.API;
+      if(api) signals.lessonLoc=api.LMSGetValue('cmi.core.lesson_location')||null;
+    }catch(e){}
+    // Signal 3: all attributes of the #slide DOM element
+    try{
+      var el=document.getElementById('slide');
+      if(el){
+        var attrs={};
+        for(var i=0;i<el.attributes.length;i++) attrs[el.attributes[i].name]=el.attributes[i].value;
+        signals.slideAttrs=attrs;
+        signals.slideText=(el.textContent||'').replace(/\s+/g,' ').trim().substring(0,150);
+      }
+    }catch(e){}
+    return signals;
+  }
+
+  function refreshCurrentSlide(){
+    try{
+      var s=getSlideSignals();
+      var quizVar=s.gcSlide&&SLIDE_MAP[s.gcSlide]||null;
+      var diagKey=JSON.stringify([s.gcSlide,s.lessonLoc,JSON.stringify(s.slideAttrs)]);
+      if(diagKey!==lastDiagKey){
+        lastDiagKey=diagKey;
+        console.log('[QuizCapture] Slide signals'
+          +' | GetCurrentSlide:',JSON.stringify(s.gcSlide)
+          ,'| lesson_location:',JSON.stringify(s.lessonLoc)
+          ,'| #slide attrs:',JSON.stringify(s.slideAttrs)
+          ,'| #slide text:',JSON.stringify(s.slideText));
+      }
+      lastQuizVar=quizVar||null;
     }catch(e){}
   }
 
-  // Read ARIA-selected answer texts from the whole document (slide container unknown).
   function getSelectedText(){
     var selected=document.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
     var texts=[];
     selected.forEach(function(el){
       var t=(el.getAttribute('aria-label')||el.textContent||'').trim();
-      // Exclude very long strings (layout/nav elements) and empty strings.
-      if(t && t.length<300) texts.push(t);
+      if(t&&t.length<300) texts.push(t);
     });
     return texts.join('[,]');
   }
 
-  // Poll slide changes every second so we always have the latest slide on click.
-  setInterval(refreshCurrentSlide, 1000);
+  setInterval(refreshCurrentSlide,1000);
 
-  document.addEventListener('click', function(e){
+  document.addEventListener('click',function(e){
     try{
-      refreshCurrentSlide(); // sync immediately on each click too
-      if(!lastQuizVar){
-        // Diagnostic: log ancestor IDs so we can see the DOM structure.
-        var el=e.target, ids=[], n=0;
-        while(el && n++<15){ if(el.id) ids.push(el.id); el=el.parentElement; }
-        if(ids.length) console.log('[QuizCapture] No slide match. Ancestor IDs:',ids.join(', '));
-        return;
-      }
+      refreshCurrentSlide();
       var capturedQuizVar=lastQuizVar;
       var capturedTarget=e.target;
-      // 150 ms delay lets Storyline update ARIA selection state before we read it.
+      if(!capturedQuizVar){
+        var el=e.target,ids=[],n=0;
+        while(el&&n++<15){if(el.id)ids.push(el.id);el=el.parentElement;}
+        // Only log for clicks inside the slide area (not nav/outline)
+        if(ids.indexOf('slide-window')>=0||ids.indexOf('slide')>=0){
+          var s=getSlideSignals();
+          console.log('[QuizCapture] Answer click — no quiz var'
+            +' | Ancestor IDs:',ids.join(', ')
+            ,'| lesson_location:',JSON.stringify(s.lessonLoc)
+            ,'| #slide attrs:',JSON.stringify(s.slideAttrs));
+        }
+        return;
+      }
       setTimeout(function(){
         var txt=getSelectedText();
         if(!txt) txt=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
-        if(txt && txt.length<300){
+        if(txt&&txt.length<300){
           var data={};
           data['CurrentQuiz_'+capturedQuizVar]=txt;
           try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
@@ -234,7 +261,7 @@
     }catch(ex){}
   },true);
 
-  console.log('[QuizCapture] click listener active, watching',Object.keys(SLIDE_MAP).length,'slides');
+  console.log('[QuizCapture] diagnostic listener active, watching',Object.keys(SLIDE_MAP).length,'slides');
 })();
 </script>
 </html>
