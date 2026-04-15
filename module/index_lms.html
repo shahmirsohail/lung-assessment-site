@@ -231,7 +231,7 @@
           ,'| DS keys:',JSON.stringify(s.dsKeys)
           ,'| #slide text:',JSON.stringify(s.slideText));
       }
-      lastQuizVar=quizVar||null;
+      // Note: lastQuizVar is NOT set here — DS.pubSub listener owns it now.
     }catch(e){}
   }
 
@@ -245,11 +245,63 @@
     return texts.join('[,]');
   }
 
+  // Primary: DS.pubSub event — fires whenever Storyline mounts/transitions a slide.
+  // slideView.props.model.get('id') returns the slide ID that maps to SLIDE_MAP.
+  // Confirmed pattern: frame.desktop.min.js uses u.on(d.slide.HAS_MOUNTED, n.onSlideChange).
+  function onSlideMounted(slideView){
+    try{
+      var sid=slideView&&slideView.props&&slideView.props.model&&
+              typeof slideView.props.model.get==='function'&&
+              slideView.props.model.get('id');
+      var qv=(sid&&SLIDE_MAP[sid])||null;
+      lastQuizVar=qv;
+      if(qv) console.log('[QuizCapture] Slide mounted → quiz var:',qv,'(slideId:',sid,')');
+      else if(sid) console.log('[QuizCapture] Non-quiz slide mounted:',sid);
+    }catch(e){}
+  }
+
+  function setupDSPubSub(){
+    try{
+      var pub=window.DS&&window.DS.pubSub;
+      var evts=window.DS&&window.DS.events;
+      if(!pub||!evts||!evts.slide||!evts.slide.HAS_MOUNTED) return false;
+      pub.on(evts.slide.HAS_MOUNTED,onSlideMounted);
+      if(evts.slide.HAS_CHANGED) pub.on(evts.slide.HAS_CHANGED,onSlideMounted);
+      console.log('[QuizCapture] DS.pubSub listener registered');
+      return true;
+    }catch(e){ return false; }
+  }
+
+  // Retry until DS is initialised — bootstrapper loads scripts asynchronously after our IIFE runs.
+  if(!setupDSPubSub()){
+    var _dsRetry=0;
+    var _dsTimer=setInterval(function(){
+      if(setupDSPubSub()||++_dsRetry>=30) clearInterval(_dsTimer);
+    },200);
+  }
+
+  // Secondary: intercept window.globalProvideData — called when each slide's JS file executes.
+  // This catches lazy-loaded slides even if DS.pubSub fires before our listener registers.
+  if(typeof window.globalProvideData==='function'){
+    var _origGPD=window.globalProvideData;
+    window.globalProvideData=function(key,data){
+      try{
+        if(SLIDE_MAP[key]){
+          lastQuizVar=SLIDE_MAP[key];
+          console.log('[QuizCapture] Slide JS loaded → quiz var:',lastQuizVar,'(key:',key,')');
+        }else if(typeof key==='string'&&/^[A-Za-z0-9]{10,13}$/.test(key)){
+          lastQuizVar=null; // Non-quiz slide JS executed
+        }
+      }catch(e){}
+      return _origGPD.apply(this,arguments);
+    };
+  }
+
+  // Diagnostic poll: logs slide signals only — does NOT update lastQuizVar.
   setInterval(refreshCurrentSlide,1000);
 
   document.addEventListener('click',function(e){
     try{
-      refreshCurrentSlide();
       var capturedQuizVar=lastQuizVar;
       var capturedTarget=e.target;
       if(!capturedQuizVar){
