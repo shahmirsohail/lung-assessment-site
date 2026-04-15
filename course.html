@@ -11,7 +11,11 @@ function withShare(url){if(!SHARE_QUERY) return url; const token=SHARE_QUERY.rep
 let hasCompleted=false; let retryInFlight=false;
 // SCORM 1.2 API stub — index_lms.html loads scormdriver.js which scans window.parent for window.API.
 // All LMSSetValue calls (including cmi.interactions.N.student_response) are captured here.
-const scormData={};
+// cmi.interactions._count must be pre-seeded to "0" so scormdriver.js uses
+// numeric indices (0, 1, 2…) on first write. Without it the driver reads ""
+// and concatenates an empty string, writing every interaction to the same
+// double-dot key ("cmi.interactions..id") and overwriting each response.
+const scormData={'cmi.interactions._count':'0'};
 window.API={
   LMSInitialize:()=>'true',
   LMSFinish:()=>'true',
@@ -19,10 +23,21 @@ window.API={
   LMSGetLastError:()=>'0',
   LMSGetErrorString:()=>'',
   LMSGetDiagnostic:()=>'',
-  LMSGetValue:(el)=>scormData[el]||'',
-  LMSSetValue:(el,val)=>{scormData[el]=val; return 'true';},
+  LMSGetValue:(el)=>(scormData[el]!==undefined?scormData[el]:''),
+  LMSSetValue:(el,val)=>{
+    scormData[el]=val;
+    // Auto-maintain _count (SCORM 1.2 LMS responsibility — the driver reads
+    // _count to pick the next index; we must increment it after each write).
+    const m=el.match(/^cmi\.interactions\.(\d+)\./);
+    if(m){
+      const nextCount=parseInt(m[1],10)+1;
+      const curCount=parseInt(scormData['cmi.interactions._count']||'0',10);
+      if(nextCount>curCount) scormData['cmi.interactions._count']=String(nextCount);
+    }
+    return 'true';
+  },
 };
-const OPTIONAL_STATUS_VARS=['Visited','LastSlideViewed_6131NtijqTH'];
+// Storyline status vars captured for debug only — NOT included in responses.
 // Maps SCORM interaction IDs (as set by scormdriver.js) to human-readable case/question labels.
 // Interaction IDs are the bare quiz-variable IDs Storyline uses internally.
 const CASE_SLIDE_MAP={
@@ -127,12 +142,16 @@ function hideBlockingError(){document.getElementById('blockingError').classList.
 function getAssessmentResponses(){
   const responses={};
   try{
-    // Primary source: SCORM 1.2 interactions captured via window.API above.
-    // scormdriver.js sets cmi.interactions.N.id (question ID) and
-    // cmi.interactions.N.student_response (the student's selected answer text).
-    const count=parseInt(scormData['cmi.interactions._count']||'0',10);
-    captureDebug.quiz_var_count=count;
-    for(let i=0;i<count;i++){
+    // Scan all scormData keys directly for interaction id/response pairs.
+    // This is more resilient than relying solely on _count (which our stub
+    // must maintain; scanning catches any edge cases where _count drifts).
+    const indices=new Set();
+    for(const k of Object.keys(scormData)){
+      const m=k.match(/^cmi\.interactions\.(\d+)\.id$/);
+      if(m) indices.add(parseInt(m[1],10));
+    }
+    captureDebug.quiz_var_count=indices.size;
+    for(const i of indices){
       const id=scormData[`cmi.interactions.${i}.id`]||'';
       const resp=scormData[`cmi.interactions.${i}.student_response`];
       if(id && resp!==undefined && resp!==''){
@@ -143,18 +162,13 @@ function getAssessmentResponses(){
   }catch(e){
     setCaptureError('scorm_capture_exception',e);
   }
-  // Supplement with Storyline GetVar for status/optional vars
+  // Record Storyline player availability in debug (do NOT add player vars to
+  // responses — they are noise that pollute the CSV).
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
     captureDebug.player_found=Boolean(player);
-    if(player){
-      for(const varName of OPTIONAL_STATUS_VARS){
-        const val=player.GetVar(varName);
-        if(val!==''&&val!==null&&val!==undefined) responses[varName]=val;
-      }
-      if(captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
-    }
+    if(player && captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
   }catch(e){setCaptureError('player_exception',e);}
   const transformed=transformResponseKeys(responses);
   captureDebug.interaction_count=Object.keys(transformed).length;
