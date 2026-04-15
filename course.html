@@ -20,7 +20,7 @@ window.API={
   LMSGetErrorString:()=>'',
   LMSGetDiagnostic:()=>'',
   LMSGetValue:(el)=>scormData[el]||'',
-  LMSSetValue:(el,val)=>{scormData[el]=val; return 'true';},
+  LMSSetValue:(el,val)=>{scormData[el]=val; if(el.includes('interactions')) console.log('[SCORM]',el,'=',val); return 'true';},
 };
 const OPTIONAL_STATUS_VARS=['Visited','LastSlideViewed_6131NtijqTH'];
 // Maps SCORM interaction IDs (as set by scormdriver.js) to human-readable case/question labels.
@@ -75,6 +75,22 @@ const CASE_SLIDE_MAP={
   "6hnSEYrNI2v":{c:"Case 16",q:"Primary Pathology"},
   "62EbC5qy4XU":{c:"Case 16",q:"Secondary Pathology"},
   "63ill7FKLkC":{c:"Case 16",q:"Confidence Level"},
+  // Previously unmapped — added to fix CSV missing columns
+  "6MCBHcqGdug":{c:"Case 1",q:"Normal or Abnormal"},
+  "68KaeOSsnS6":{c:"Case 1",q:"Confidence Level"},
+  "5e9jomKlHfP":{c:"Case 2",q:"Normal or Abnormal"},
+  "5ZhF3VzFmTy":{c:"Case 2",q:"Confidence Level"},
+  "5yK3VMbcDoy":{c:"Case 3",q:"Normal or Abnormal"},
+  "6IqoREZRvog":{c:"Case 4",q:"Confidence Level"},
+  "5YbYFQbv0RC":{c:"Case 6",q:"Normal or Abnormal"},
+  "69qco2hy745":{c:"Case 6",q:"Confidence Level"},
+  "5ytielWvUeW":{c:"Case 7",q:"Confidence Level"},
+  "6byTt3CHQ1q":{c:"Case 8",q:"Confidence Level"},
+  "6dlML8DG70T":{c:"Case 9",q:"Normal or Abnormal"},
+  "6ctKuAUWPDP":{c:"Case 9",q:"Confidence Level"},
+  "5f08UagnTNW":{c:"Case 12",q:"Normal or Abnormal"},
+  "6D6LXSB3Efo":{c:"Case 12",q:"Confidence Level"},
+  "62h8oLr9tuL":{c:"Case 14",q:"Normal or Abnormal"},
 };
 function transformResponseKeys(raw){
   const out={};
@@ -192,7 +208,14 @@ async function touch(completed=false){
   upsertRecord(payload);
   setSyncStatus('pending');
   try{
-    await postJson(url, payload);
+    const result=await postJson(url, payload);
+    if(completed && result.attempt){
+      upsertRecord({
+        ...result.attempt,
+        name:result.attempt.learner_name||user.name,
+        email:result.attempt.learner_email||user.email,
+      });
+    }
     setSyncStatus('synced');
     return {ok:true};
   }catch(e){
