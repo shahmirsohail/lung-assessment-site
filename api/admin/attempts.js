@@ -16,8 +16,9 @@ module.exports = async (req, res) => {
     const limit = Math.min(Number(req.query?.limit || 100), 500);
     const offset = Math.max(Number(req.query?.offset || 0), 0);
     const email = normalizeEmail(req.query?.email || '');
+    const moduleType = String(req.query?.module_type || '').trim();
 
-    const rows = await listAttempts({ limit, offset, email });
+    const rows = await listAttempts({ limit, offset, email, moduleType });
     return json(res, 200, { ok: true, rows });
   } catch (err) {
     return json(res, 400, { ok: false, error: err.message });

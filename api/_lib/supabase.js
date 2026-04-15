@@ -49,9 +49,10 @@ async function getAttemptById(attemptId) {
   return rows?.[0] || null;
 }
 
-async function listAttempts({ limit = 100, offset = 0, email = '' }) {
+async function listAttempts({ limit = 100, offset = 0, email = '', moduleType = '' }) {
   const filters = [`select=*`, `order=updated_at.desc`, `limit=${limit}`, `offset=${offset}`];
   if (email) filters.push(`learner_email=eq.${encodeURIComponent(email.toLowerCase())}`);
+  if (moduleType) filters.push(`module_type=eq.${encodeURIComponent(moduleType)}`);
   return supabaseFetch(`attempts?${filters.join('&')}`);
 }
 

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lung Ultrasound Assessment</title>
+<title>Clinical Assessment</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   body {
@@ -69,7 +69,7 @@
 <body>
 <header>
   <div class="header-left">
-    <h1>Lung Ultrasound Assessment</h1>
+    <h1>Clinical Assessment</h1>
   </div>
   <a id="adminLink" href="#" class="btn-ghost">Admin dashboard</a>
 </header>
@@ -80,7 +80,8 @@
     <div class="field"><label for="email">Email address</label><input id="email" type="email" placeholder="Enter your email address" autocomplete="email"></div>
     <div class="btn-row">
       <button id="saveBtn" class="btn-secondary">Save details</button>
-      <button id="launchBtn" class="btn-primary">Launch assessment</button>
+      <button id="launchLusBtn" class="btn-primary">Launch Lung Ultrasound</button>
+      <button id="launchCxrBtn" class="btn-primary">Launch Chest X-ray</button>
       <span id="saveFeedback" class="save-feedback">Details saved.</span>
     </div>
     <p id="launchError" class="error" role="alert" aria-live="polite"></p>
@@ -102,7 +103,8 @@ const USER='lungAssessmentLocalUser';
 const nameInput=document.getElementById('name');
 const emailInput=document.getElementById('email');
 const saveBtn=document.getElementById('saveBtn');
-const launchBtn=document.getElementById('launchBtn');
+const launchLusBtn=document.getElementById('launchLusBtn');
+const launchCxrBtn=document.getElementById('launchCxrBtn');
 const launchError=document.getElementById('launchError');
 const exportBtn=document.getElementById('exportBtn');
 const saveFeedback=document.getElementById('saveFeedback');
@@ -147,24 +149,29 @@ function formatDate(iso){
   try{return new Date(iso).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
   catch{return iso;}
 }
+const MODULE_DISPLAY={
+  'lung-ultrasound':'Lung Ultrasound',
+  'chest-xray':'Chest X-ray',
+};
 function render(){
   const r=loadRecords();
   const container=document.getElementById('records');
   if(!r.length){
     container.innerHTML=`<div class="empty-state">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M8 8h5M8 16h4"/></svg>
-      No assessment records yet. Launch the assessment to get started.
+      No assessment records yet. Launch an assessment to get started.
     </div>`;
     return;
   }
-  let html='<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Started</th><th>Status</th><th>Time spent</th></tr></thead><tbody>';
+  let html='<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Module</th><th>Started</th><th>Status</th><th>Time spent</th></tr></thead><tbody>';
   for(const x of r){
     const statusBadge=x.completed
       ?'<span class="badge badge-green">Completed</span>'
       :'<span class="badge badge-grey">In progress</span>';
     const mins=x.minutes_spent||0;
     const timeStr=mins>0?`${mins} min`:'—';
-    html+=`<tr><td>${x.name||'—'}</td><td>${x.email||'—'}</td><td>${formatDate(x.started_at)}</td><td>${statusBadge}</td><td>${timeStr}</td></tr>`;
+    const modLabel=MODULE_DISPLAY[x.module_type]||x.module_type||'—';
+    html+=`<tr><td>${x.name||'—'}</td><td>${x.email||'—'}</td><td>${modLabel}</td><td>${formatDate(x.started_at)}</td><td>${statusBadge}</td><td>${timeStr}</td></tr>`;
   }
   html+='</tbody></table></div>';
   container.innerHTML=html;
@@ -173,7 +180,7 @@ function csvEscape(v){v=(v??'').toString(); return '"'+v.replaceAll('"','""')+'"
 function exportCSV(){
   const rows=loadRecords(); if(!rows.length) return;
   const responseKeys=[...new Set(rows.flatMap(r=>Object.keys(r.responses||{})))].filter(k=>/^Case \d+ - /.test(k)).sort();
-  const baseCols=['name','email','attempt_id','started','completed','started_at','last_opened_at','minutes_spent'];
+  const baseCols=['name','email','module_type','attempt_id','started','completed','started_at','last_opened_at','minutes_spent'];
   const allCols=[...baseCols,...responseKeys];
   const csv=[allCols.join(',')].concat(rows.map(r=>{
     const base=baseCols.map(c=>csvEscape(r[c]));
@@ -181,7 +188,7 @@ function exportCSV(){
     return [...base,...resp].join(',');
   })).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='lung-assessment-results.csv'; a.click();
+  a.href=URL.createObjectURL(blob); a.download='assessment-results.csv'; a.click();
 }
 async function postJson(url, body){
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -198,7 +205,7 @@ saveBtn.onclick=()=>{
   saveFeedback.classList.add('show');
   setTimeout(()=>saveFeedback.classList.remove('show'),2500);
 }
-launchBtn.onclick=async ()=>{
+async function launchModule(moduleType, courseFile, btn){
   const now=new Date().toISOString();
   const currentUser=ensureLearnerIdentity();
   const baseUser={name:nameInput.value.trim(),email:emailInput.value.trim(),learner_id:currentUser.learner_id,attempt_id:currentUser.attempt_id||''};
@@ -211,20 +218,22 @@ launchBtn.onclick=async ()=>{
     launchError.textContent='Please enter your email address before launching.';
     emailInput.focus(); return;
   }
-  launchBtn.disabled=true;
+  btn.disabled=true;
   try{
-    const startResult=await postJson('/api/attempt/start',{name:baseUser.name,email:baseUser.email,learner_id:baseUser.learner_id});
+    const startResult=await postJson('/api/attempt/start',{name:baseUser.name,email:baseUser.email,learner_id:baseUser.learner_id,module_type:moduleType});
     const u={...baseUser,attempt_id:startResult.attempt_id};
     saveUser(u);
-    upsertRecord({...u,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
-    const assessmentWindow=window.open(withShare('course.html'),'_blank');
-    if(!assessmentWindow){ location.href=withShare('course.html'); }
+    upsertRecord({...u,module_type:moduleType,started:true,started_at:now,last_opened_at:now,minutes_spent:0,completed:false});
+    const assessmentWindow=window.open(withShare(courseFile),'_blank');
+    if(!assessmentWindow){ location.href=withShare(courseFile); }
   }catch(err){
     launchError.textContent=err?.message||'Unable to start assessment. Please try again.';
   }finally{
-    launchBtn.disabled=false;
+    btn.disabled=false;
   }
 }
+launchLusBtn.onclick=()=>launchModule('lung-ultrasound','course.html',launchLusBtn);
+launchCxrBtn.onclick=()=>launchModule('chest-xray','course-xray.html',launchCxrBtn);
 exportBtn.onclick=exportCSV;
 window.addEventListener('focus',render);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') render()});

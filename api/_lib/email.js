@@ -27,13 +27,23 @@ async function sendEmail({ to, subject, html }) {
   return { id: messageId };
 }
 
+const MODULE_LABELS = {
+  'lung-ultrasound': 'Lung Ultrasound Assessment',
+  'chest-xray': 'Chest X-ray Assessment',
+};
+
+function getModuleLabel(moduleType) {
+  return MODULE_LABELS[moduleType] || 'Assessment';
+}
+
 function buildSummaryHtml(attempt) {
+  const title = getModuleLabel(attempt.module_type) + ' Results';
   const rows = Object.entries(attempt.responses || {})
     .map(([k, v]) => `<tr><td style="padding:6px;border:1px solid #ddd">${k}</td><td style="padding:6px;border:1px solid #ddd">${String(v)}</td></tr>`)
     .join('');
 
   return `
-    <h2>Lung Ultrasound Assessment Results</h2>
+    <h2>${title}</h2>
     <p><strong>Name:</strong> ${attempt.learner_name || ''}</p>
     <p><strong>Email:</strong> ${attempt.learner_email || ''}</p>
     <p><strong>Completed:</strong> ${attempt.completed ? 'Yes' : 'No'}</p>
@@ -50,4 +60,5 @@ function buildSummaryHtml(attempt) {
 module.exports = {
   sendEmail,
   buildSummaryHtml,
+  getModuleLabel,
 };
