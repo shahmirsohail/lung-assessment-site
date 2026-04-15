@@ -169,8 +169,8 @@
   var lastDiagKey='';
 
   function getSlideSignals(){
-    var signals={gcSlide:null,lessonLoc:null,slideAttrs:{},slideText:''};
-    // Signal 1: GetPlayer().GetCurrentSlide()
+    var signals={gcSlide:null,lessonLoc:null,slideAttrs:{},slideText:'',hash:'',histState:null,dsKeys:[]};
+    // Signal 1: GetPlayer() — methods already dumped once
     try{
       var player=typeof GetPlayer==='function'&&GetPlayer();
       if(player){
@@ -188,7 +188,7 @@
       var api=window.parent&&window.parent.API;
       if(api) signals.lessonLoc=api.LMSGetValue('cmi.core.lesson_location')||null;
     }catch(e){}
-    // Signal 3: all attributes of the #slide DOM element
+    // Signal 3: #slide element attributes and text
     try{
       var el=document.getElementById('slide');
       if(el){
@@ -198,6 +198,21 @@
         signals.slideText=(el.textContent||'').replace(/\s+/g,' ').trim().substring(0,150);
       }
     }catch(e){}
+    // Signal 4: URL hash — Storyline calls updateWindowHistory on slide change
+    try{ signals.hash=window.location.hash||''; }catch(e){}
+    // Signal 5: history.state — Storyline may pushState with slide metadata
+    try{ signals.histState=window.history.state?JSON.stringify(window.history.state).substring(0,200):null; }catch(e){}
+    // Signal 6: top-level keys of window.DS (Storyline data store, initialized to {})
+    try{
+      if(window.DS&&typeof window.DS==='object'){
+        signals.dsKeys=Object.keys(window.DS).slice(0,20);
+        // If DS looks interesting, log its full content once
+        if(!window._qcDSDumped&&signals.dsKeys.length>0){
+          window._qcDSDumped=true;
+          console.log('[QuizCapture] window.DS:',JSON.stringify(window.DS).substring(0,500));
+        }
+      }
+    }catch(e){}
     return signals;
   }
 
@@ -205,13 +220,15 @@
     try{
       var s=getSlideSignals();
       var quizVar=s.gcSlide&&SLIDE_MAP[s.gcSlide]||null;
-      var diagKey=JSON.stringify([s.gcSlide,s.lessonLoc,JSON.stringify(s.slideAttrs)]);
+      var diagKey=JSON.stringify([s.gcSlide,s.lessonLoc,s.hash,s.histState]);
       if(diagKey!==lastDiagKey){
         lastDiagKey=diagKey;
         console.log('[QuizCapture] Slide signals'
           +' | GetCurrentSlide:',JSON.stringify(s.gcSlide)
           ,'| lesson_location:',JSON.stringify(s.lessonLoc)
-          ,'| #slide attrs:',JSON.stringify(s.slideAttrs)
+          ,'| hash:',JSON.stringify(s.hash)
+          ,'| history.state:',JSON.stringify(s.histState)
+          ,'| DS keys:',JSON.stringify(s.dsKeys)
           ,'| #slide text:',JSON.stringify(s.slideText));
       }
       lastQuizVar=quizVar||null;
@@ -243,8 +260,8 @@
           var s=getSlideSignals();
           console.log('[QuizCapture] Answer click — no quiz var'
             +' | Ancestor IDs:',ids.join(', ')
-            ,'| lesson_location:',JSON.stringify(s.lessonLoc)
-            ,'| #slide attrs:',JSON.stringify(s.slideAttrs));
+            ,'| hash:',JSON.stringify(s.hash)
+            ,'| history.state:',JSON.stringify(s.histState));
         }
         return;
       }
