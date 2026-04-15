@@ -124,21 +124,14 @@
 
 <main>
   <div class="card">
-    <h2>Authentication &amp; filters</h2>
-    <div class="field-row">
-      <div class="field">
-        <label for="token">Admin token</label>
-        <input id="token" type="password" placeholder="Enter ADMIN_DASHBOARD_TOKEN" autocomplete="current-password">
-      </div>
-      <div class="field">
-        <label for="emailFilter">Filter by learner email <span style="font-weight:400;color:#888">(optional)</span></label>
-        <input id="emailFilter" type="email" placeholder="name@domain.com" autocomplete="off">
-      </div>
+    <h2>Authentication</h2>
+    <div class="field">
+      <label for="token">Password</label>
+      <input id="token" type="password" placeholder="Enter password" autocomplete="current-password">
     </div>
     <div class="btn-row">
       <button id="loadBtn" class="btn-primary">Load attempts</button>
     </div>
-    <p class="hint">The admin token is held in browser memory only — it is never stored or logged server-side.</p>
   </div>
 
   <div class="card">
@@ -148,6 +141,12 @@
     </div>
     <p id="statusMsg" class="status-msg"></p>
     <div id="tableWrap"></div>
+    <div id="filterWrap" style="display:none; margin-top:20px; padding-top:18px; border-top:1px solid #eef0f4;">
+      <div class="field" style="margin-bottom:0; max-width:360px;">
+        <label for="emailFilter">Filter by learner email</label>
+        <input id="emailFilter" type="email" placeholder="name@domain.com" autocomplete="off">
+      </div>
+    </div>
   </div>
 </main>
 
@@ -156,6 +155,7 @@ const tokenInput  = document.getElementById('token');
 const emailFilter = document.getElementById('emailFilter');
 const statusMsg   = document.getElementById('statusMsg');
 const tableWrap   = document.getElementById('tableWrap');
+const filterWrap  = document.getElementById('filterWrap');
 const exportBtn   = document.getElementById('exportBtn');
 const loadBtn     = document.getElementById('loadBtn');
 
@@ -243,26 +243,100 @@ function exportCSV() {
   a.click();
 }
 
+function renderTable(rows) {
+  const filterVal = emailFilter.value.trim().toLowerCase();
+  const filtered = filterVal
+    ? rows.filter(r => (r.learner_email || '').toLowerCase().includes(filterVal))
+    : rows;
+
+  statusMsg.textContent = filtered.length === rows.length
+    ? `Showing ${rows.length} attempt${rows.length !== 1 ? 's' : ''}.`
+    : `Showing ${filtered.length} of ${rows.length} attempt${rows.length !== 1 ? 's' : ''} matching "${filterVal}".`;
+
+  if (!filtered.length) {
+    tableWrap.innerHTML = `<div class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <path d="M8 12h8M8 8h5M8 16h4"/>
+      </svg>
+      ${filterVal ? `No attempts match "${esc(filterVal)}".` : 'No attempts found.'}
+    </div>`;
+    return;
+  }
+
+  let html = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Attempt ID</th>
+      <th>Learner</th>
+      <th>Status</th>
+      <th>Timestamps</th>
+      <th>Responses</th>
+      <th>Actions</th>
+    </tr></thead><tbody>`;
+
+  for (const row of filtered) {
+    const completedBadge = row.completed
+      ? '<span class="badge badge-green">Completed</span>'
+      : '<span class="badge badge-grey">In progress</span>';
+    const startedBadge = row.started
+      ? '<span class="badge badge-blue">Started</span>'
+      : '<span class="badge badge-grey">Not started</span>';
+    const mins = row.minutes_spent || 0;
+
+    html += `<tr>
+      <td><div class="attempt-id">${esc(row.attempt_id || '—')}</div></td>
+      <td>
+        <div class="learner-name">${esc(row.learner_name || '—')}</div>
+        <div class="learner-email">${esc(row.learner_email || '—')}</div>
+      </td>
+      <td>
+        <div class="status-cell">
+          ${startedBadge}
+          ${completedBadge}
+          <span style="font-size:12px;color:#666;margin-top:2px">${mins > 0 ? `${mins} min spent` : 'No time recorded'}</span>
+        </div>
+      </td>
+      <td>
+        <div class="ts-block">
+          <div><span class="ts-label">Started:</span> ${formatDate(row.started_at)}</div>
+          <div><span class="ts-label">Last opened:</span> ${formatDate(row.last_opened_at)}</div>
+          <div><span class="ts-label">Completed:</span> ${formatDate(row.completed_at)}</div>
+        </div>
+      </td>
+      <td>${renderResponses(row.responses)}</td>
+      <td>
+        <div class="actions-cell">
+          <button class="action-btn action-btn-primary" onclick="resend('${esc(row.attempt_id)}','learner')">Resend learner email</button>
+          <button class="action-btn action-btn-primary" onclick="resend('${esc(row.attempt_id)}','admin')">Resend internal email</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  tableWrap.innerHTML = html;
+}
+
 async function loadAttempts() {
   const token = tokenInput.value.trim();
   if (!token) {
-    statusMsg.textContent = 'Please enter the admin token before loading.';
+    statusMsg.textContent = 'Please enter your password before loading.';
     statusMsg.className = 'status-msg is-error';
     tokenInput.focus();
     return;
   }
-  const email = emailFilter.value.trim().toLowerCase();
-  const q = email ? `?email=${encodeURIComponent(email)}&limit=200` : '?limit=200';
 
   loadBtn.disabled = true;
   loadBtn.innerHTML = '<span class="spinner"></span>Loading…';
   statusMsg.className = 'status-msg';
   statusMsg.textContent = '';
   tableWrap.innerHTML = '';
+  filterWrap.style.display = 'none';
   exportBtn.style.display = 'none';
+  emailFilter.value = '';
 
   try {
-    const res = await fetch(withShare(`/api/admin/attempts${q}`), {
+    const res = await fetch(withShare('/api/admin/attempts?limit=200'), {
       headers: { 'x-admin-token': token }
     });
     const data = await res.json().catch(() => ({ ok: false, error: 'Invalid response from server' }));
@@ -274,71 +348,22 @@ async function loadAttempts() {
 
     const rows = data.rows || [];
     _lastRows = rows;
-    statusMsg.textContent = `Showing ${rows.length} attempt${rows.length !== 1 ? 's' : ''}${email ? ` for "${email}"` : ''}.`;
 
     if (!rows.length) {
+      statusMsg.textContent = 'No attempts found.';
       tableWrap.innerHTML = `<div class="empty-state">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="3"/>
           <path d="M8 12h8M8 8h5M8 16h4"/>
         </svg>
-        No attempts found${email ? ` matching "${esc(email)}"` : ''}.
+        No attempts found.
       </div>`;
       return;
     }
 
     exportBtn.style.display = '';
-    let html = `<div class="table-wrap"><table>
-      <thead><tr>
-        <th>Attempt ID</th>
-        <th>Learner</th>
-        <th>Status</th>
-        <th>Timestamps</th>
-        <th>Responses</th>
-        <th>Actions</th>
-      </tr></thead><tbody>`;
-
-    for (const row of rows) {
-      const completedBadge = row.completed
-        ? '<span class="badge badge-green">Completed</span>'
-        : '<span class="badge badge-grey">In progress</span>';
-      const startedBadge = row.started
-        ? '<span class="badge badge-blue">Started</span>'
-        : '<span class="badge badge-grey">Not started</span>';
-      const mins = row.minutes_spent || 0;
-
-      html += `<tr>
-        <td><div class="attempt-id">${esc(row.attempt_id || '—')}</div></td>
-        <td>
-          <div class="learner-name">${esc(row.learner_name || '—')}</div>
-          <div class="learner-email">${esc(row.learner_email || '—')}</div>
-        </td>
-        <td>
-          <div class="status-cell">
-            ${startedBadge}
-            ${completedBadge}
-            <span style="font-size:12px;color:#666;margin-top:2px">${mins > 0 ? `${mins} min spent` : 'No time recorded'}</span>
-          </div>
-        </td>
-        <td>
-          <div class="ts-block">
-            <div><span class="ts-label">Started:</span> ${formatDate(row.started_at)}</div>
-            <div><span class="ts-label">Last opened:</span> ${formatDate(row.last_opened_at)}</div>
-            <div><span class="ts-label">Completed:</span> ${formatDate(row.completed_at)}</div>
-          </div>
-        </td>
-        <td>${renderResponses(row.responses)}</td>
-        <td>
-          <div class="actions-cell">
-            <button class="action-btn action-btn-primary" onclick="resend('${esc(row.attempt_id)}','learner')">Resend learner email</button>
-            <button class="action-btn action-btn-primary" onclick="resend('${esc(row.attempt_id)}','admin')">Resend internal email</button>
-          </div>
-        </td>
-      </tr>`;
-    }
-
-    html += '</tbody></table></div>';
-    tableWrap.innerHTML = html;
+    filterWrap.style.display = '';
+    renderTable(rows);
   } catch (err) {
     statusMsg.textContent = `Unexpected error: ${err?.message || 'Unknown error'}`;
     statusMsg.className = 'status-msg is-error';
@@ -350,7 +375,7 @@ async function loadAttempts() {
 
 async function resend(attemptId, target) {
   const token = tokenInput.value.trim();
-  if (!token) { alert('Admin token required'); return; }
+  if (!token) { alert('Password required'); return; }
   try {
     const res = await fetch(withShare('/api/admin/resend'), {
       method: 'POST',
@@ -374,6 +399,8 @@ document.getElementById('backBtn').onclick = () => { location.href = withShare('
 
 // Allow pressing Enter in the token field to load
 tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadAttempts(); });
-emailFilter.addEventListener('keydown', e => { if (e.key === 'Enter') loadAttempts(); });
+
+// Live client-side filter as user types
+emailFilter.addEventListener('input', () => { if (_lastRows.length) renderTable(_lastRows); });
 </script>
 </body></html>
