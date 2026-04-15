@@ -216,20 +216,24 @@ async function main() {
   console.log(`  [${postMsgWorks ? 'OK  ' : 'FAIL'}] postMessage channel (course.html listener)`);
   console.log(`  [${qvdHasData ? 'OK  ' : 'FAIL'}] quizVarData populated`);
 
-  if (pdCaptured || qvdHasData) {
+  // PASS requires evidence that the pointerdown capture path fired and sent text.
+  // qvdHasData alone is insufficient: the direct postMessage test always populates
+  // quizVarData regardless of whether synthetic clicks are captured, so using
+  // (pdCaptured || qvdHasData) would mask a broken capture mechanism.
+  if (pdCaptured) {
     hr('RESULT: PASS ✓ — quiz capture working');
   } else {
     hr('RESULT: FAIL ✗');
-    console.log('  quizVarData:', JSON.stringify(qvd2));
+    console.log('  quizVarData after direct postMessage:', JSON.stringify(qvd2));
     console.log('\n  [QuizCapture] logs:');
     captureLogsAll.forEach(l => console.log('   ', l.text));
     if (!postMsgWorks) console.log('\n  Root cause: postMessage channel broken — check course.html window.addEventListener(message...)');
-    else if (!pdCaptured) console.log('\n  Root cause: pointerdown not capturing text — check _getAncestorText() and slide element structure');
+    else console.log('\n  Root cause: pointerdown capture produced no text — check _getAncestorText() and slide element structure');
   }
 
   await browser.close();
   server.close();
-  process.exit((pdCaptured || qvdHasData) ? 0 : 1);
+  process.exit(pdCaptured ? 0 : 1);
 }
 
 main().catch(e => { console.error('[FATAL]', e); process.exit(1); });
