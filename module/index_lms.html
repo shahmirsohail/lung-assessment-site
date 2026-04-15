@@ -167,6 +167,14 @@
 
   var lastQuizVar=null;
   var lastDiagKey='';
+  // Quiz var IDs for Secondary Pathology slides — multi-select grids where the user
+  // picks one location per pathology row. Clicks are accumulated (not overwritten).
+  var SECONDARY_PATH_VARS={
+    "65gar2uXnMJ":1,"5kpFVKROihy":1,"6EPyDpD5mOZ":1,"6ghcilD1x5K":1,"6OVGNwcEofI":1,
+    "6m3ARHw6WtV":1,"6mFyc4p3YCs":1,"6lo4G5D7ibC":1,"6TqcnbGsBTw":1,"6BEhuqTyUXA":1,
+    "5a0hSWY1JLA":1,"5s9nds7Vf6N":1,"5Vmbt8ncJj4":1,"6GRN1pdRKtH":1,"63ezaVdaYgd":1,"62EbC5qy4XU":1
+  };
+  var _secPathAcc={}; // quizVarId -> Array of clicked location texts
 
   function getSlideSignals(){
     var signals={gcSlide:null,lessonLoc:null,slideAttrs:{},slideText:'',hash:'',histState:null,dsKeys:[]};
@@ -269,6 +277,8 @@
               typeof slideView.props.model.get==='function'&&
               slideView.props.model.get('id');
       var qv=(sid&&SLIDE_MAP[sid])||null;
+      // Reset accumulated selections when user enters (or re-enters) a Secondary Pathology slide.
+      if(qv&&SECONDARY_PATH_VARS[qv]) _secPathAcc[qv]=[];
       lastQuizVar=qv;
       if(qv) console.log('[QuizCapture] Slide mounted → quiz var:',qv,'(slideId:',sid,')');
       else if(sid) console.log('[QuizCapture] Non-quiz slide mounted:',sid);
@@ -440,9 +450,21 @@
         if(!txt) txt=_getAncestorText(capturedTarget,10);
         if(txt&&txt.length<300){
           var data={};
-          data['CurrentQuiz_'+capturedQuizVar]=txt;
+          if(SECONDARY_PATH_VARS[capturedQuizVar]){
+            // Multi-select: accumulate all clicked location texts for this slide.
+            // Each pathology row has an independent selection; we collect them all
+            // and send the full [,]-joined string on every click so course.html
+            // always has the latest complete state.
+            if(!_secPathAcc[capturedQuizVar]) _secPathAcc[capturedQuizVar]=[];
+            var acc=_secPathAcc[capturedQuizVar];
+            // Skip if identical to the last entry (double-click guard).
+            if(acc.length===0||acc[acc.length-1]!==txt) acc.push(txt);
+            data['CurrentQuiz_'+capturedQuizVar]=acc.join('[,]');
+          }else{
+            data['CurrentQuiz_'+capturedQuizVar]=txt;
+          }
           try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
-          console.log('[QuizCapture][pd]',capturedQuizVar,'=',txt);
+          console.log('[QuizCapture][pd]',capturedQuizVar,'=',data['CurrentQuiz_'+capturedQuizVar]);
         }
       },200);
     }catch(ex){}
