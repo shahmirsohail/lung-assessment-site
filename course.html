@@ -22,7 +22,6 @@ window.API={
   LMSGetValue:(el)=>scormData[el]||'',
   LMSSetValue:(el,val)=>{scormData[el]=val; if(el.includes('interactions')) console.log('[SCORM]',el,'=',val); return 'true';},
 };
-const OPTIONAL_STATUS_VARS=['Visited','LastSlideViewed_6131NtijqTH'];
 // Maps SCORM interaction IDs (as set by scormdriver.js) to human-readable case/question labels.
 // Interaction IDs are the bare quiz-variable IDs Storyline uses internally.
 const CASE_SLIDE_MAP={
@@ -97,8 +96,8 @@ function transformResponseKeys(raw){
   for(const [k,v] of Object.entries(raw)){
     // Match bare ID or CurrentQuiz_<ID> format (Storyline may use either in interaction IDs)
     const m=k.match(/^(?:CurrentQuiz_)?([A-Za-z0-9]+)$/);
-    if(m){const map=CASE_SLIDE_MAP[m[1]]; if(map){out[`${map.c} - ${map.q}`]=v; continue;}}
-    out[k]=v;
+    if(m){const map=CASE_SLIDE_MAP[m[1]]; if(map){out[`${map.c} - ${map.q}`]=v;}}
+    // Unmapped keys are dropped — only CASE_SLIDE_MAP entries reach responses
   }
   return out;
 }
@@ -159,18 +158,11 @@ function getAssessmentResponses(){
   }catch(e){
     setCaptureError('scorm_capture_exception',e);
   }
-  // Supplement with Storyline GetVar for status/optional vars
   try{
     const frame=document.getElementById('assessmentFrame');
     const player=frame?.contentWindow?.GetPlayer?.();
     captureDebug.player_found=Boolean(player);
-    if(player){
-      for(const varName of OPTIONAL_STATUS_VARS){
-        const val=player.GetVar(varName);
-        if(val!==''&&val!==null&&val!==undefined) responses[varName]=val;
-      }
-      if(captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
-    }
+    if(player && captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
   }catch(e){setCaptureError('player_exception',e);}
   const transformed=transformResponseKeys(responses);
   captureDebug.interaction_count=Object.keys(transformed).length;
@@ -199,7 +191,11 @@ function buildPayload(completed=false){
     last_opened_at:nowIso,
     minutes_spent:mins,
     responses,
-    capture_debug:{...captureDebug},
+    capture_debug:{
+      ...captureDebug,
+      scorm_interaction_count:scormData['cmi.interactions._count']||'0',
+      scorm_keys_sample:Object.keys(scormData).filter(k=>k.includes('interactions')).slice(0,10),
+    },
   };
 }
 async function touch(completed=false){
