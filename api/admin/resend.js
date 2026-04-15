@@ -1,6 +1,6 @@
 const { json, readJsonBody, getEnv } = require('../_lib/config');
 const { getAttemptById, insertEmailLog } = require('../_lib/supabase');
-const { sendEmail, buildSummaryHtml } = require('../_lib/email');
+const { sendEmail, buildSummaryHtml, getModuleLabel } = require('../_lib/email');
 
 function authorized(req, body) {
   const token = req.headers['x-admin-token'] || body?.token;
@@ -24,9 +24,10 @@ module.exports = async (req, res) => {
     const target = body.target === 'admin' ? getEnv('ADMIN_RESULTS_EMAIL') : attempt.learner_email;
     const template = body.target === 'admin' ? 'internal_summary_resend' : 'learner_summary_resend';
 
+    const moduleLabel = getModuleLabel(attempt.module_type);
     const sent = await sendEmail({
       to: [target],
-      subject: `Assessment results resend: ${attempt.learner_name || attempt.learner_email}`,
+      subject: `${moduleLabel} results resend: ${attempt.learner_name || attempt.learner_email}`,
       html: buildSummaryHtml(attempt),
     });
 

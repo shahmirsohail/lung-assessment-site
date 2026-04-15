@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin Dashboard — Lung Ultrasound Assessment</title>
+<title>Admin Dashboard — Clinical Assessment</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   body {
@@ -117,7 +117,7 @@
 <header>
   <div class="header-left">
     <h1>Admin Dashboard</h1>
-    <p>Lung Ultrasound Assessment — Internal Results</p>
+    <p>Clinical Assessment — Internal Results</p>
   </div>
   <button class="btn-ghost" id="backBtn">&#8592; Back to learner page</button>
 </header>
@@ -140,30 +140,36 @@
       <button id="exportBtn" class="btn-outline" style="display:none">&#8675; Export CSV</button>
     </div>
     <div id="filterWrap" style="display:none; margin-bottom:18px;">
-      <div class="field" style="margin-bottom:0; max-width:360px;">
-        <label for="emailFilter">Filter by learner email</label>
-        <input id="emailFilter" type="email" placeholder="name@domain.com" autocomplete="off">
+      <div class="field-row">
+        <div class="field" style="margin-bottom:0; max-width:360px;">
+          <label for="emailFilter">Filter by learner email</label>
+          <input id="emailFilter" type="email" placeholder="name@domain.com" autocomplete="off">
+        </div>
+        <div class="field" style="margin-bottom:0; max-width:220px;">
+          <label for="moduleFilter">Filter by module</label>
+          <select id="moduleFilter" style="width:100%;padding:10px 14px;border:1px solid #cdd2db;border-radius:6px;font-size:15px;background:#fff;outline:none;">
+            <option value="">All modules</option>
+            <option value="lung-ultrasound">Lung Ultrasound</option>
+            <option value="chest-xray">Chest X-ray</option>
+          </select>
+        </div>
       </div>
     </div>
     <p id="statusMsg" class="status-msg"></p>
     <div id="tableWrap"></div>
-    <div id="filterWrap" style="display:none; margin-top:20px; padding-top:18px; border-top:1px solid #eef0f4;">
-      <div class="field" style="margin-bottom:0; max-width:360px;">
-        <label for="emailFilter">Filter by learner email</label>
-        <input id="emailFilter" type="email" placeholder="name@domain.com" autocomplete="off">
-      </div>
-    </div>
   </div>
 </main>
 
 <script>
-const tokenInput  = document.getElementById('token');
-const emailFilter = document.getElementById('emailFilter');
-const statusMsg   = document.getElementById('statusMsg');
-const tableWrap   = document.getElementById('tableWrap');
-const filterWrap  = document.getElementById('filterWrap');
-const exportBtn   = document.getElementById('exportBtn');
-const loadBtn     = document.getElementById('loadBtn');
+const tokenInput   = document.getElementById('token');
+const emailFilter  = document.getElementById('emailFilter');
+const moduleFilter = document.getElementById('moduleFilter');
+const statusMsg    = document.getElementById('statusMsg');
+const tableWrap    = document.getElementById('tableWrap');
+const filterWrap   = document.getElementById('filterWrap');
+const exportBtn    = document.getElementById('exportBtn');
+const loadBtn      = document.getElementById('loadBtn');
+const MODULE_DISPLAY = { 'lung-ultrasound': 'Lung Ultrasound', 'chest-xray': 'Chest X-ray' };
 
 const SHARE_QUERY = window.location.search || '';
 function withShare(url) {
@@ -231,7 +237,7 @@ function exportCSV() {
   if (!rows.length) return;
   const responseKeys = [...new Set(rows.flatMap(r => Object.keys(r.responses || {})))]
     .filter(k => /^Case \d+ - /.test(k)).sort();
-  const baseCols = ['attempt_id', 'learner_name', 'learner_email', 'started', 'completed',
+  const baseCols = ['attempt_id', 'learner_name', 'learner_email', 'module_type', 'started', 'completed',
                     'started_at', 'last_opened_at', 'completed_at', 'minutes_spent'];
   const allCols = [...baseCols, ...responseKeys];
   const csv = [allCols.join(',')].concat(rows.map(r => {
@@ -245,19 +251,24 @@ function exportCSV() {
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'lung-assessment-admin-results.csv';
+  a.download = 'assessment-admin-results.csv';
   a.click();
 }
 
 function renderTable(rows) {
   const filterVal = emailFilter.value.trim().toLowerCase();
-  const filtered = filterVal
-    ? rows.filter(r => (r.learner_email || '').toLowerCase().includes(filterVal))
-    : rows;
+  const moduleVal = moduleFilter.value;
+  let filtered = rows;
+  if (filterVal) filtered = filtered.filter(r => (r.learner_email || '').toLowerCase().includes(filterVal));
+  if (moduleVal) filtered = filtered.filter(r => (r.module_type || 'lung-ultrasound') === moduleVal);
 
+  const filterDesc = [
+    filterVal && `email "${filterVal}"`,
+    moduleVal && `module "${MODULE_DISPLAY[moduleVal] || moduleVal}"`,
+  ].filter(Boolean).join(' + ');
   statusMsg.textContent = filtered.length === rows.length
     ? `Showing ${rows.length} attempt${rows.length !== 1 ? 's' : ''}.`
-    : `Showing ${filtered.length} of ${rows.length} attempt${rows.length !== 1 ? 's' : ''} matching "${filterVal}".`;
+    : `Showing ${filtered.length} of ${rows.length} attempt${rows.length !== 1 ? 's' : ''} matching ${filterDesc}.`;
 
   if (!filtered.length) {
     tableWrap.innerHTML = `<div class="empty-state">
@@ -265,7 +276,7 @@ function renderTable(rows) {
         <rect x="3" y="3" width="18" height="18" rx="3"/>
         <path d="M8 12h8M8 8h5M8 16h4"/>
       </svg>
-      ${filterVal ? `No attempts match "${esc(filterVal)}".` : 'No attempts found.'}
+      ${filterDesc ? `No attempts match ${esc(filterDesc)}.` : 'No attempts found.'}
     </div>`;
     return;
   }
@@ -274,6 +285,7 @@ function renderTable(rows) {
     <thead><tr>
       <th>Attempt ID</th>
       <th>Learner</th>
+      <th>Module</th>
       <th>Status</th>
       <th>Timestamps</th>
       <th>Responses</th>
@@ -288,6 +300,7 @@ function renderTable(rows) {
       ? '<span class="badge badge-blue">Started</span>'
       : '<span class="badge badge-grey">Not started</span>';
     const mins = row.minutes_spent || 0;
+    const modLabel = MODULE_DISPLAY[row.module_type] || row.module_type || 'Lung Ultrasound';
 
     html += `<tr>
       <td><div class="attempt-id">${esc(row.attempt_id || '—')}</div></td>
@@ -295,6 +308,7 @@ function renderTable(rows) {
         <div class="learner-name">${esc(row.learner_name || '—')}</div>
         <div class="learner-email">${esc(row.learner_email || '—')}</div>
       </td>
+      <td><span style="font-size:13px">${esc(modLabel)}</span></td>
       <td>
         <div class="status-cell">
           ${startedBadge}
@@ -406,7 +420,8 @@ document.getElementById('backBtn').onclick = () => { location.href = withShare('
 // Allow pressing Enter in the token field to load
 tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadAttempts(); });
 
-// Live client-side filter as user types
+// Live client-side filters
 emailFilter.addEventListener('input', () => { if (_lastRows.length) renderTable(_lastRows); });
+moduleFilter.addEventListener('change', () => { if (_lastRows.length) renderTable(_lastRows); });
 </script>
 </body></html>

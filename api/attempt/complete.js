@@ -1,7 +1,7 @@
 const { json, readJsonBody, getEnv, nowIso } = require('../_lib/config');
 const { buildAttemptPayload } = require('../_lib/attempt');
 const { upsertAttempt, getAttemptById, insertEmailLog } = require('../_lib/supabase');
-const { sendEmail, buildSummaryHtml } = require('../_lib/email');
+const { sendEmail, buildSummaryHtml, getModuleLabel } = require('../_lib/email');
 
 async function safeInsertEmailLog(log) {
   try { await insertEmailLog(log); } catch { /* never let logging failures block submission */ }
@@ -24,13 +24,14 @@ module.exports = async (req, res) => {
     };
 
     const summaryHtml = buildSummaryHtml(merged);
+    const moduleLabel = getModuleLabel(merged.module_type);
     const adminEmail = getEnv('ADMIN_RESULTS_EMAIL', false);
 
     if (!existing?.completion_email_sent_at) {
       try {
         const learnerResult = await sendEmail({
           to: [merged.learner_email],
-          subject: 'Your Lung Ultrasound Assessment results',
+          subject: `Your ${moduleLabel} results`,
           html: summaryHtml,
         });
         await safeInsertEmailLog({
@@ -58,7 +59,7 @@ module.exports = async (req, res) => {
       try {
         const adminResult = await sendEmail({
           to: [adminEmail],
-          subject: `Assessment completed: ${merged.learner_name || merged.learner_email}`,
+          subject: `${moduleLabel} completed: ${merged.learner_name || merged.learner_email}`,
           html: summaryHtml,
         });
         await safeInsertEmailLog({
