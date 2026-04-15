@@ -83,7 +83,7 @@ module.exports = async (req, res) => {
     }
 
     await upsertAttempt(merged);
-    return json(res, 200, { ok: true, attempt_id: merged.attempt_id });
+    return json(res, 200, { ok: true, attempt_id: merged.attempt_id, attempt: merged });
   } catch (err) {
     return json(res, 400, { ok: false, error: err.message });
   }
