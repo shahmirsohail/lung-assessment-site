@@ -108,7 +108,9 @@ Because SCORM interactions never fire, a custom `[QuizCapture]` click-listener i
 
 4. **Click listener** — `document.addEventListener('click', ..., true)` fires on every click. Reads `lastQuizVar` (set by step 1/3), then waits 150 ms for Storyline to update aria state, then calls `getSelectedText()`.
 
-5. **`getSelectedText()`** — Queries `[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]` **scoped to `#slide-window`** (NOT the whole document). Scoping is critical: Storyline's player controls (play/pause, Menu button) also carry `aria-pressed="true"` and will pollute the result with values like `"play/pause[,]Menu"` if the query runs on `document`.
+5. **`getSelectedText()`** — Queries `[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]` **scoped to `#slide-window`** and filtered through a nav-label exclusion regex. Two layers are needed:
+   - **Scoping to `#slide-window`**: excludes outer player controls (play/pause, Menu button) that live in the player chrome and carry `aria-pressed="true"`
+   - **Nav-label regex** `/^(next|back|previous|...)$/i`: excludes NEXT/BACK navigation buttons that Storyline renders **inside** `#slide-window` as part of the slide content, also with `aria-pressed="true"`. Without this filter, answers read as `"NEXT"` instead of the selected choice.
 
 6. **postMessage to parent** — Sends `{ type: 'sl_quiz_vars', data: { 'CurrentQuiz_<id>': 'Answer text' } }` to `course.html`, which stores it in `quizVarData` and merges it in `getAssessmentResponses()`.
 
