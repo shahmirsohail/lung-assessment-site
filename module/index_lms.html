@@ -174,7 +174,57 @@
     "6m3ARHw6WtV":1,"6mFyc4p3YCs":1,"6lo4G5D7ibC":1,"6TqcnbGsBTw":1,"6BEhuqTyUXA":1,
     "5a0hSWY1JLA":1,"5s9nds7Vf6N":1,"5Vmbt8ncJj4":1,"6GRN1pdRKtH":1,"63ezaVdaYgd":1,"62EbC5qy4XU":1
   };
-  var _secPathAcc={}; // quizVarId -> Array of clicked location texts
+  // _secPathAcc: quizVarId -> { pathologyName: string[] } — accumulates per-pathology clicks
+  var _secPathAcc={};
+  // _secPathRowY: quizVarId -> { pathologyName: midY } — y-position of each row label (detected lazily)
+  var _secPathRowY={};
+  // Ordered pathology row labels (same order as they appear on the slide, top to bottom).
+  var PATHOLOGY_ORDER=['Pleural Effusion','Pneumothorax','Alveolar Syndrome','Interstitial Syndrome'];
+
+  // Walk text nodes inside #slide-window to find elements whose trimmed text exactly matches
+  // a pathology row label, then record the mid-y of their nearest positioned ancestor.
+  // Called lazily on the first click of each Secondary Pathology slide.
+  function _detectPathologyRows(){
+    var rows={};
+    var container=document.getElementById('slide-window')||document.body;
+    try{
+      var walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT,null,false);
+      var node;
+      while((node=walker.nextNode())){
+        var text=(node.textContent||'').trim();
+        if(PATHOLOGY_ORDER.indexOf(text)<0) continue;
+        // Walk up to the nearest positioned ancestor for a stable bounding rect.
+        var el=node.parentElement;
+        var posEl=el;
+        while(posEl&&posEl!==container){
+          try{if(/absolute|relative/.test(window.getComputedStyle(posEl).position)) break;}catch(e){}
+          posEl=posEl.parentElement;
+        }
+        var target=(posEl&&posEl!==container)?posEl:el;
+        if(!target) continue;
+        var rect=target.getBoundingClientRect();
+        // Only record the first (top-most) hit per name — the label div itself.
+        if(!(text in rows)&&(rect.height>0||rect.width>0)){
+          rows[text]=rect.top+rect.height/2;
+        }
+      }
+    }catch(e){}
+    return rows;
+  }
+
+  // Return the pathology name whose row y-midpoint is closest to the clicked element.
+  function _findPathologyForClick(clickedEl,rowYMap){
+    try{
+      var rect=clickedEl.getBoundingClientRect();
+      var midY=rect.top+rect.height/2;
+      var bestName=null,bestDist=Infinity;
+      for(var name in rowYMap){
+        var dist=Math.abs(midY-rowYMap[name]);
+        if(dist<bestDist){bestDist=dist;bestName=name;}
+      }
+      return bestName;
+    }catch(e){return null;}
+  }
 
   function getSlideSignals(){
     var signals={gcSlide:null,lessonLoc:null,slideAttrs:{},slideText:'',hash:'',histState:null,dsKeys:[]};
@@ -278,7 +328,7 @@
               slideView.props.model.get('id');
       var qv=(sid&&SLIDE_MAP[sid])||null;
       // Reset accumulated selections when user enters (or re-enters) a Secondary Pathology slide.
-      if(qv&&SECONDARY_PATH_VARS[qv]) _secPathAcc[qv]=[];
+      if(qv&&SECONDARY_PATH_VARS[qv]){ _secPathAcc[qv]={}; _secPathRowY[qv]=null; }
       lastQuizVar=qv;
       if(qv) console.log('[QuizCapture] Slide mounted → quiz var:',qv,'(slideId:',sid,')');
       else if(sid) console.log('[QuizCapture] Non-quiz slide mounted:',sid);
@@ -451,15 +501,29 @@
         if(txt&&txt.length<300){
           var data={};
           if(SECONDARY_PATH_VARS[capturedQuizVar]){
-            // Multi-select: accumulate all clicked location texts for this slide.
-            // Each pathology row has an independent selection; we collect them all
-            // and send the full [,]-joined string on every click so course.html
-            // always has the latest complete state.
-            if(!_secPathAcc[capturedQuizVar]) _secPathAcc[capturedQuizVar]=[];
-            var acc=_secPathAcc[capturedQuizVar];
-            // Skip if identical to the last entry (double-click guard).
-            if(acc.length===0||acc[acc.length-1]!==txt) acc.push(txt);
-            data['CurrentQuiz_'+capturedQuizVar]=acc.join('[,]');
+            // Detect which pathology row was clicked (lazily on first click).
+            if(!_secPathRowY[capturedQuizVar]||Object.keys(_secPathRowY[capturedQuizVar]).length===0){
+              _secPathRowY[capturedQuizVar]=_detectPathologyRows();
+              console.log('[QuizCapture] Pathology rows detected:',JSON.stringify(_secPathRowY[capturedQuizVar]));
+            }
+            var rowYMap=_secPathRowY[capturedQuizVar]||{};
+            var pathName=_findPathologyForClick(capturedTarget,rowYMap);
+            if(!_secPathAcc[capturedQuizVar]) _secPathAcc[capturedQuizVar]={};
+            var pathMap=_secPathAcc[capturedQuizVar];
+            if(pathName){
+              if(!pathMap[pathName]) pathMap[pathName]=[];
+              var arr=pathMap[pathName];
+              // Skip consecutive duplicate (double-click guard).
+              if(arr.length===0||arr[arr.length-1]!==txt) arr.push(txt);
+            }
+            // Build "Pleural Effusion: Right; Pneumothorax: Right, Left; ..." ordered string.
+            var parts=[];
+            for(var pi=0;pi<PATHOLOGY_ORDER.length;pi++){
+              var pn=PATHOLOGY_ORDER[pi];
+              if(pathMap[pn]&&pathMap[pn].length>0) parts.push(pn+': '+pathMap[pn].join(', '));
+            }
+            // Fallback: if row detection failed entirely, just use the raw text.
+            data['CurrentQuiz_'+capturedQuizVar]=parts.length?parts.join('; '):txt;
           }else{
             data['CurrentQuiz_'+capturedQuizVar]=txt;
           }
