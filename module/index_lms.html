@@ -136,42 +136,87 @@
 </body>
 <script src="html5/lib/scripts/bootstrapper.min.js"></script>
 <script>
-// Poll Storyline quiz variables from within the iframe and post to parent.
-// SCORM interactions are not fired by this module build; this is the fallback.
+// Capture quiz answers via DOM click events and post to parent.
+// SCORM interactions are skipped in this module build (actTopGrCompleteAction cancel bug);
+// this click-capture approach is the reliable fallback.
 (function(){
-  var VARS=[
-    "CurrentQuiz_6MCBHcqGdug","CurrentQuiz_6SU5leVeQsi","CurrentQuiz_65gar2uXnMJ","CurrentQuiz_68KaeOSsnS6",
-    "CurrentQuiz_5e9jomKlHfP","CurrentQuiz_5ZOKBebxyW2","CurrentQuiz_5kpFVKROihy","CurrentQuiz_5ZhF3VzFmTy",
-    "CurrentQuiz_5yK3VMbcDoy","CurrentQuiz_5oxZ0ZFyHt8","CurrentQuiz_6EPyDpD5mOZ","CurrentQuiz_6ezkQYSpbNx",
-    "CurrentQuiz_6hweffvG2uw","CurrentQuiz_5oGE3DEqRiT","CurrentQuiz_6ghcilD1x5K","CurrentQuiz_6IqoREZRvog",
-    "CurrentQuiz_6n7oNdyUl7w","CurrentQuiz_5l12aCMhVVo","CurrentQuiz_6OVGNwcEofI","CurrentQuiz_6NcI9JoE86e",
-    "CurrentQuiz_5YbYFQbv0RC","CurrentQuiz_5cUveeY2AZX","CurrentQuiz_6m3ARHw6WtV","CurrentQuiz_69qco2hy745",
-    "CurrentQuiz_6ITaNbR8Q8S","CurrentQuiz_5khAwQzVtQq","CurrentQuiz_6mFyc4p3YCs","CurrentQuiz_5ytielWvUeW",
-    "CurrentQuiz_5ubhpvHlHFI","CurrentQuiz_6nS94DJ6CZC","CurrentQuiz_6lo4G5D7ibC","CurrentQuiz_6byTt3CHQ1q",
-    "CurrentQuiz_6dlML8DG70T","CurrentQuiz_5kQEh3hweNd","CurrentQuiz_6TqcnbGsBTw","CurrentQuiz_6ctKuAUWPDP",
-    "CurrentQuiz_6Dqa9OU2g6X","CurrentQuiz_5WsYCWPr2Da","CurrentQuiz_6BEhuqTyUXA","CurrentQuiz_5x4OxX4Pa57",
-    "CurrentQuiz_6WKtFSF8KSC","CurrentQuiz_5WWtcH0AG7U","CurrentQuiz_5a0hSWY1JLA","CurrentQuiz_5aUyEqImMJ1",
-    "CurrentQuiz_5f08UagnTNW","CurrentQuiz_5yoCmTAHRxU","CurrentQuiz_5s9nds7Vf6N","CurrentQuiz_6D6LXSB3Efo",
-    "CurrentQuiz_652FLzQWU2K","CurrentQuiz_6QMgd2h7blD","CurrentQuiz_5Vmbt8ncJj4","CurrentQuiz_6ANqTsqkXiv",
-    "CurrentQuiz_62h8oLr9tuL","CurrentQuiz_6LamQMvAESO","CurrentQuiz_6GRN1pdRKtH","CurrentQuiz_6cCPym56kgG",
-    "CurrentQuiz_5btPwg5guc3","CurrentQuiz_5atfdCzOntK","CurrentQuiz_63ezaVdaYgd","CurrentQuiz_6RdvYcXdmpF",
-    "CurrentQuiz_5gtOhNA1cgY","CurrentQuiz_6hnSEYrNI2v","CurrentQuiz_62EbC5qy4XU","CurrentQuiz_63ill7FKLkC"
-  ];
-  function poll(){
-    try{
-      var player=typeof GetPlayer==='function'&&GetPlayer();
-      if(!player){setTimeout(poll,1000);return;}
-      var data={};
-      for(var i=0;i<VARS.length;i++){
-        try{var v=player.GetVar(VARS[i]); if(v!==null&&v!==undefined&&v!=='') data[VARS[i]]=v;}catch(e){}
+  // Slide element-ID fragment → quiz variable ID (built from grepping all 64 slide JS files)
+  var SLIDE_MAP={
+    "6D6lHejtOdz":"6MCBHcqGdug","69lVJT1f0QB":"6SU5leVeQsi","5dJy4aYxSDa":"65gar2uXnMJ",
+    "6QfArJYa8kn":"68KaeOSsnS6","6kULAfOBBvD":"5e9jomKlHfP","6CjmNVS7dAB":"5ZOKBebxyW2",
+    "6Wf8z7Tn6h3":"5kpFVKROihy","6IwYk2kNU2a":"5ZhF3VzFmTy","6XLpaY6tuY3":"5yK3VMbcDoy",
+    "67XJTnlJLdm":"5oxZ0ZFyHt8","6pkJEWER6V8":"6EPyDpD5mOZ","5ekAqFqSQ6j":"6ezkQYSpbNx",
+    "63Tub0CMiyi":"6hweffvG2uw","65SwsELJ2FZ":"5oGE3DEqRiT","5eDBBzCzXUY":"6ghcilD1x5K",
+    "6KGUdFUi8GF":"6IqoREZRvog","5dmHQMKvURG":"6n7oNdyUl7w","6lT67FBHJaP":"5l12aCMhVVo",
+    "6NJDylTYzfm":"6OVGNwcEofI","5sjsYvnI4ND":"6NcI9JoE86e","6qEwEr73Ahq":"5YbYFQbv0RC",
+    "5WnoxU420tv":"5cUveeY2AZX","6BJNTtFq1bW":"6m3ARHw6WtV","6hDecjRJYXM":"69qco2hy745",
+    "5gLDTY263PC":"6ITaNbR8Q8S","6Zi77SBFnNc":"5khAwQzVtQq","6blq9AKhfTs":"6mFyc4p3YCs",
+    "6d3Iei52DCI":"5ytielWvUeW","69KCQTSNhwB":"5ubhpvHlHFI","6Co9whtlpSP":"6nS94DJ6CZC",
+    "5t3redaWdm9":"6lo4G5D7ibC","6R9A7I8ybjK":"6byTt3CHQ1q","6rMKgg13d55":"6dlML8DG70T",
+    "6MrUAi6ugfV":"5kQEh3hweNd","6FnPOeyPW5U":"6TqcnbGsBTw","6THFmfdJy7y":"6ctKuAUWPDP",
+    "5yiBdeoVNKk":"6Dqa9OU2g6X","68gExR3Bkgs":"5WsYCWPr2Da","5V098HWA8ek":"6BEhuqTyUXA",
+    "6Cl7MUbEhFR":"5x4OxX4Pa57","5es0zacRKUu":"6WKtFSF8KSC","5o5uQiLCyuZ":"5WWtcH0AG7U",
+    "6cjohDIo3EL":"5a0hSWY1JLA","5uO28ZT8JmY":"5aUyEqImMJ1","6d4W3sUK093":"5f08UagnTNW",
+    "6oXgbMJPlSD":"5yoCmTAHRxU","5buOyermflr":"5s9nds7Vf6N","6ewfljs78ln":"6D6LXSB3Efo",
+    "6ADrbVRsZTz":"652FLzQWU2K","5y49wWowd4C":"6QMgd2h7blD","5aoyItdpB70":"5Vmbt8ncJj4",
+    "5c0upnqD5FS":"6ANqTsqkXiv","6QtpRBw3NYH":"62h8oLr9tuL","5wHCjfLD8Yv":"6LamQMvAESO",
+    "62gmvQeEJTe":"6GRN1pdRKtH","5iAG4JPatH3":"6cCPym56kgG","5b9RInqtc9W":"5btPwg5guc3",
+    "6Ro9YHFnfxv":"5atfdCzOntK","6JnjXavlY2Q":"63ezaVdaYgd","62pqJBdqqhI":"6RdvYcXdmpF",
+    "5nZjNiZcj9J":"5gtOhNA1cgY","5ghCgSIHT6w":"6hnSEYrNI2v","6G5WSRfzWy1":"62EbC5qy4XU",
+    "5oxcmhuC8Zb":"63ill7FKLkC"
+  };
+
+  // Walk up the DOM to find an ancestor whose element ID contains a known slide ID.
+  function findSlideId(el){
+    var seen=0;
+    while(el && seen++<20){
+      var id=el.id||'';
+      for(var sid in SLIDE_MAP){
+        if(id===sid || id.indexOf(sid)>=0) return sid;
       }
-      if(Object.keys(data).length>0){
-        try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(e){}
-      }
-    }catch(e){}
-    setTimeout(poll,2000);
+      el=el.parentElement;
+    }
+    return null;
   }
-  setTimeout(poll,3000);
+
+  // Read all currently selected/checked answer texts within the slide container.
+  function getSelectedText(slideEl){
+    var selected=slideEl.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
+    var texts=[];
+    selected.forEach(function(el){
+      var t=(el.getAttribute('aria-label')||el.textContent||'').trim();
+      if(t) texts.push(t);
+    });
+    return texts.join('[,]');
+  }
+
+  document.addEventListener('click', function(e){
+    try{
+      var slideId=findSlideId(e.target);
+      if(!slideId) return;
+      var quizVar=SLIDE_MAP[slideId];
+      if(!quizVar) return;
+      // Find the slide container element to scope the ARIA selection query.
+      var slideEl=e.target;
+      while(slideEl && (slideEl.id||'').indexOf(slideId)<0 && slideEl.id!==slideId) slideEl=slideEl.parentElement;
+      if(!slideEl) slideEl=document.body;
+      var capturedTarget=e.target;
+      var capturedSlideEl=slideEl;
+      // Wait 150 ms for Storyline to update ARIA selection state, then read it.
+      setTimeout(function(){
+        var txt=getSelectedText(capturedSlideEl);
+        if(!txt) txt=(capturedTarget.getAttribute('aria-label')||capturedTarget.textContent||'').trim();
+        if(txt){
+          var data={};
+          data['CurrentQuiz_'+quizVar]=txt;
+          try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
+          console.log('[QuizCapture]', quizVar, '=', txt);
+        }
+      }, 150);
+    }catch(ex){}
+  }, true);
+
+  console.log('[QuizCapture] DOM click listener active, watching', Object.keys(SLIDE_MAP).length, 'slides');
 })();
 </script>
 </html>
