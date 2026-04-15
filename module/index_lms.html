@@ -135,4 +135,43 @@
   <link rel="stylesheet" href="html5/data/css/output.min.css" data-noprefix/>
 </body>
 <script src="html5/lib/scripts/bootstrapper.min.js"></script>
+<script>
+// Poll Storyline quiz variables from within the iframe and post to parent.
+// SCORM interactions are not fired by this module build; this is the fallback.
+(function(){
+  var VARS=[
+    "CurrentQuiz_6MCBHcqGdug","CurrentQuiz_6SU5leVeQsi","CurrentQuiz_65gar2uXnMJ","CurrentQuiz_68KaeOSsnS6",
+    "CurrentQuiz_5e9jomKlHfP","CurrentQuiz_5ZOKBebxyW2","CurrentQuiz_5kpFVKROihy","CurrentQuiz_5ZhF3VzFmTy",
+    "CurrentQuiz_5yK3VMbcDoy","CurrentQuiz_5oxZ0ZFyHt8","CurrentQuiz_6EPyDpD5mOZ","CurrentQuiz_6ezkQYSpbNx",
+    "CurrentQuiz_6hweffvG2uw","CurrentQuiz_5oGE3DEqRiT","CurrentQuiz_6ghcilD1x5K","CurrentQuiz_6IqoREZRvog",
+    "CurrentQuiz_6n7oNdyUl7w","CurrentQuiz_5l12aCMhVVo","CurrentQuiz_6OVGNwcEofI","CurrentQuiz_6NcI9JoE86e",
+    "CurrentQuiz_5YbYFQbv0RC","CurrentQuiz_5cUveeY2AZX","CurrentQuiz_6m3ARHw6WtV","CurrentQuiz_69qco2hy745",
+    "CurrentQuiz_6ITaNbR8Q8S","CurrentQuiz_5khAwQzVtQq","CurrentQuiz_6mFyc4p3YCs","CurrentQuiz_5ytielWvUeW",
+    "CurrentQuiz_5ubhpvHlHFI","CurrentQuiz_6nS94DJ6CZC","CurrentQuiz_6lo4G5D7ibC","CurrentQuiz_6byTt3CHQ1q",
+    "CurrentQuiz_6dlML8DG70T","CurrentQuiz_5kQEh3hweNd","CurrentQuiz_6TqcnbGsBTw","CurrentQuiz_6ctKuAUWPDP",
+    "CurrentQuiz_6Dqa9OU2g6X","CurrentQuiz_5WsYCWPr2Da","CurrentQuiz_6BEhuqTyUXA","CurrentQuiz_5x4OxX4Pa57",
+    "CurrentQuiz_6WKtFSF8KSC","CurrentQuiz_5WWtcH0AG7U","CurrentQuiz_5a0hSWY1JLA","CurrentQuiz_5aUyEqImMJ1",
+    "CurrentQuiz_5f08UagnTNW","CurrentQuiz_5yoCmTAHRxU","CurrentQuiz_5s9nds7Vf6N","CurrentQuiz_6D6LXSB3Efo",
+    "CurrentQuiz_652FLzQWU2K","CurrentQuiz_6QMgd2h7blD","CurrentQuiz_5Vmbt8ncJj4","CurrentQuiz_6ANqTsqkXiv",
+    "CurrentQuiz_62h8oLr9tuL","CurrentQuiz_6LamQMvAESO","CurrentQuiz_6GRN1pdRKtH","CurrentQuiz_6cCPym56kgG",
+    "CurrentQuiz_5btPwg5guc3","CurrentQuiz_5atfdCzOntK","CurrentQuiz_63ezaVdaYgd","CurrentQuiz_6RdvYcXdmpF",
+    "CurrentQuiz_5gtOhNA1cgY","CurrentQuiz_6hnSEYrNI2v","CurrentQuiz_62EbC5qy4XU","CurrentQuiz_63ill7FKLkC"
+  ];
+  function poll(){
+    try{
+      var player=typeof GetPlayer==='function'&&GetPlayer();
+      if(!player){setTimeout(poll,1000);return;}
+      var data={};
+      for(var i=0;i<VARS.length;i++){
+        try{var v=player.GetVar(VARS[i]); if(v!==null&&v!==undefined&&v!=='') data[VARS[i]]=v;}catch(e){}
+      }
+      if(Object.keys(data).length>0){
+        try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(e){}
+      }
+    }catch(e){}
+    setTimeout(poll,2000);
+  }
+  setTimeout(poll,3000);
+})();
+</script>
 </html>

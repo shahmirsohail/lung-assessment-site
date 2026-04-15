@@ -12,6 +12,13 @@ let hasCompleted=false; let retryInFlight=false;
 // SCORM 1.2 API stub — index_lms.html loads scormdriver.js which scans window.parent for window.API.
 // All LMSSetValue calls (including cmi.interactions.N.student_response) are captured here.
 const scormData={};
+// Fallback quiz data received from the module iframe via postMessage (used when SCORM interactions aren't fired).
+const quizVarData={};
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='sl_quiz_vars'&&e.data.data&&typeof e.data.data==='object'){
+    Object.assign(quizVarData,e.data.data);
+  }
+});
 window.API={
   LMSInitialize:()=>'true',
   LMSFinish:()=>'true',
@@ -164,8 +171,11 @@ function getAssessmentResponses(){
     captureDebug.player_found=Boolean(player);
     if(player && captureDebug.last_error?.code==='player_unavailable') clearCaptureError();
   }catch(e){setCaptureError('player_exception',e);}
-  const transformed=transformResponseKeys(responses);
+  // Merge postMessage quiz var data as fallback (SCORM interactions take precedence if both present).
+  const merged={...quizVarData,...responses};
+  const transformed=transformResponseKeys(merged);
   captureDebug.interaction_count=Object.keys(transformed).length;
+  captureDebug.quiz_var_polled=Object.keys(quizVarData).length;
   captureDebug.last_capture_at=new Date().toISOString();
   return transformed;
 }
