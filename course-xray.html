@@ -29,12 +29,87 @@ window.API={
   LMSSetValue:(el,val)=>{scormData[el]=val; if(el.includes('interactions')) console.log('[SCORM]',el,'=',val); return 'true';},
 };
 // Maps SCORM interaction IDs to human-readable case/question labels.
-// PLACEHOLDER: Fill this in during Phase B after the Chest X-ray Storyline module is uploaded.
-// To populate: grep -oh 'CurrentQuiz_[A-Za-z0-9]*' module-xray/html5/data/js/data.js | sort -u
-// Then map each ID to { c: "Case N", q: "Question type" } by examining per-slide JS files.
 const CASE_SLIDE_MAP={
-  // Example format (replace with actual CXR IDs):
-  // "AbCdEfGhIjK": { c: "Case 1", q: "Primary Pathology" },
+  // Case 1
+  "5efZ3RNYaw3":{c:"Case 1",q:"Normal or Abnormal"},
+  "6Ze6akKuDCD":{c:"Case 1",q:"Primary Pathology"},
+  "6F7vRpBDac8":{c:"Case 1",q:"Secondary Pathology"},
+  "6HqI95qfgPX":{c:"Case 1",q:"Confidence Level"},
+  // Case 2
+  "6HZ4JdeXZ68":{c:"Case 2",q:"Normal or Abnormal"},
+  "5fsPJK0O8x9":{c:"Case 2",q:"Primary Pathology"},
+  "6TcEIFwLjuK":{c:"Case 2",q:"Secondary Pathology"},
+  "6qNVX6JYEFT":{c:"Case 2",q:"Confidence Level"},
+  // Case 3
+  "6UeB9syEkj2":{c:"Case 3",q:"Normal or Abnormal"},
+  "5Z34JI5yqUB":{c:"Case 3",q:"Primary Pathology"},
+  "5nCunfN90IU":{c:"Case 3",q:"Secondary Pathology"},
+  "6XdnnrtbnQS":{c:"Case 3",q:"Confidence Level"},
+  // Case 4
+  "6koiAJr9f5q":{c:"Case 4",q:"Normal or Abnormal"},
+  "6LIXcvz7Qym":{c:"Case 4",q:"Primary Pathology"},
+  "5bp7HOxZdEQ":{c:"Case 4",q:"Secondary Pathology"},
+  "5aZW9FxmICi":{c:"Case 4",q:"Confidence Level"},
+  // Case 5
+  "6hn9wLwvj5H":{c:"Case 5",q:"Normal or Abnormal"},
+  "62AJedxFYhj":{c:"Case 5",q:"Primary Pathology"},
+  "5pd30XzFLMa":{c:"Case 5",q:"Secondary Pathology"},
+  "5qZ2zw6Wat6":{c:"Case 5",q:"Confidence Level"},
+  // Case 6
+  "5kwcuAdKdWW":{c:"Case 6",q:"Normal or Abnormal"},
+  "5Uzh01hatyB":{c:"Case 6",q:"Primary Pathology"},
+  "60eB0NWzC6P":{c:"Case 6",q:"Secondary Pathology"},
+  "62A93e41ytr":{c:"Case 6",q:"Confidence Level"},
+  // Case 7
+  "6ofpynaxdYl":{c:"Case 7",q:"Normal or Abnormal"},
+  "6mR3sy1H5py":{c:"Case 7",q:"Primary Pathology"},
+  "5ZR6QUBXoVf":{c:"Case 7",q:"Secondary Pathology"},
+  "6Vb0zODhIjt":{c:"Case 7",q:"Confidence Level"},
+  // Case 8
+  "6h651rdebui":{c:"Case 8",q:"Normal or Abnormal"},
+  "5tGAIien2hA":{c:"Case 8",q:"Primary Pathology"},
+  "6KBrb3sEfur":{c:"Case 8",q:"Secondary Pathology"},
+  "6bMylJZgbAQ":{c:"Case 8",q:"Confidence Level"},
+  // Case 9
+  "6NDrYXCfvWb":{c:"Case 9",q:"Normal or Abnormal"},
+  "6keeKa8O3tc":{c:"Case 9",q:"Primary Pathology"},
+  "5tDuHbUwH2W":{c:"Case 9",q:"Secondary Pathology"},
+  "64PZfxqGJhG":{c:"Case 9",q:"Confidence Level"},
+  // Case 10
+  "65TNmqAk5Cm":{c:"Case 10",q:"Normal or Abnormal"},
+  "6hgXMZFPiYi":{c:"Case 10",q:"Primary Pathology"},
+  "5mC5GeyjRBF":{c:"Case 10",q:"Secondary Pathology"},
+  "6LBQt5xm65H":{c:"Case 10",q:"Confidence Level"},
+  // Case 11
+  "6RmY2j29sav":{c:"Case 11",q:"Normal or Abnormal"},
+  "6gJ3Uo2kH43":{c:"Case 11",q:"Primary Pathology"},
+  "6eHTOubnByI":{c:"Case 11",q:"Secondary Pathology"},
+  "6T4bPoETL2s":{c:"Case 11",q:"Confidence Level"},
+  // Case 12
+  "6BTRfzDRb4H":{c:"Case 12",q:"Normal or Abnormal"},
+  "6K6rTIffcpV":{c:"Case 12",q:"Primary Pathology"},
+  "5iG05KHzKkw":{c:"Case 12",q:"Secondary Pathology"},
+  "5mWZsP8jWsq":{c:"Case 12",q:"Confidence Level"},
+  // Case 13
+  "5vqBFpZokFJ":{c:"Case 13",q:"Normal or Abnormal"},
+  "6CFQaqkcIH6":{c:"Case 13",q:"Primary Pathology"},
+  "6KvATvewqmy":{c:"Case 13",q:"Secondary Pathology"},
+  "6H20XPLWIHt":{c:"Case 13",q:"Confidence Level"},
+  // Case 14
+  "6oF2xjLJPmI":{c:"Case 14",q:"Normal or Abnormal"},
+  "6UAGztwZp8r":{c:"Case 14",q:"Primary Pathology"},
+  "5uphVyycJOa":{c:"Case 14",q:"Secondary Pathology"},
+  "6RJDXce1hos":{c:"Case 14",q:"Confidence Level"},
+  // Case 15
+  "6fyw8qFfi2r":{c:"Case 15",q:"Normal or Abnormal"},
+  "6RBmfVt7YyO":{c:"Case 15",q:"Primary Pathology"},
+  "6hbAeqHPcI6":{c:"Case 15",q:"Secondary Pathology"},
+  "6g7LSRkteQh":{c:"Case 15",q:"Confidence Level"},
+  // Case 16
+  "5evmXN93TrV":{c:"Case 16",q:"Normal or Abnormal"},
+  "6pFjdJXDb8h":{c:"Case 16",q:"Primary Pathology"},
+  "6TK8lnK76zb":{c:"Case 16",q:"Secondary Pathology"},
+  "615RIjAKCFT":{c:"Case 16",q:"Confidence Level"},
 };
 function transformResponseKeys(raw){
   const out={};

@@ -135,4 +135,353 @@
   <link rel="stylesheet" href="html5/data/css/output.min.css" data-noprefix/>
 </body>
 <script src="html5/lib/scripts/bootstrapper.min.js"></script>
+<script>
+(function(){
+  var SLIDE_MAP={
+    // Case 1
+    "5Yn4lkVDknD":"5efZ3RNYaw3","5c5JyRrAqox":"6Ze6akKuDCD",
+    "6nnDvXgZx9f":"6F7vRpBDac8","5ktYbVsTE5B":"6HqI95qfgPX",
+    // Case 2
+    "5YNtc2qA2q6":"6HZ4JdeXZ68","6Ep4qYPOc64":"5fsPJK0O8x9",
+    "5icTfTkeOqL":"6TcEIFwLjuK","5xjOpbtBloG":"6qNVX6JYEFT",
+    // Case 3
+    "6S57XjbBBO5":"6UeB9syEkj2","6owvkCKyGId":"5Z34JI5yqUB",
+    "5oIBx6RsMXB":"5nCunfN90IU","5sDVCYgJZJ4":"6XdnnrtbnQS",
+    // Case 4
+    "67pXdv35UfF":"6koiAJr9f5q","6HbHqfR3vxc":"6LIXcvz7Qym",
+    "6YhoNED1Fk1":"5bp7HOxZdEQ","6jUWOx2DIOD":"5aZW9FxmICi",
+    // Case 5
+    "5uQZrJn56Ly":"6hn9wLwvj5H","5tFg4nx02Ap":"62AJedxFYhj",
+    "6Jv7TrA0j92":"5pd30XzFLMa","5cALRipRUax":"5qZ2zw6Wat6",
+    // Case 6
+    "6Oi4DxCvIvZ":"5kwcuAdKdWW","5t4BKX9zBag":"5Uzh01hatyB",
+    "6KEPNwzr8fH":"60eB0NWzC6P","6qY97vOlP0b":"62A93e41ytr",
+    // Case 7
+    "6J8Q50qhC2e":"6ofpynaxdYl","6SSzmeNtt09":"6mR3sy1H5py",
+    "5f1j7AtB75f":"5ZR6QUBXoVf","6TOZvJfIOHw":"6Vb0zODhIjt",
+    // Case 8
+    "6BhmDwlXfWA":"6h651rdebui","65vcVRkLVxZ":"5tGAIien2hA",
+    "6Nltj9eSmjE":"6KBrb3sEfur","6Cs3w5sZSJq":"6bMylJZgbAQ",
+    // Case 9
+    "61K272SkEOk":"6NDrYXCfvWb","5aP4vtvu4rG":"6keeKa8O3tc",
+    "5qiqT7wPh5Q":"5tDuHbUwH2W","5f1s4Lw5zjh":"64PZfxqGJhG",
+    // Case 10
+    "6bkXAiOSn6E":"65TNmqAk5Cm","5YfANeNgrcq":"6hgXMZFPiYi",
+    "6k3zqOeKH15":"5mC5GeyjRBF","5cdcmT9r0z0":"6LBQt5xm65H",
+    // Case 11
+    "5ZBFBxcPTX2":"6RmY2j29sav","6onQ1gfM0ay":"6gJ3Uo2kH43",
+    "61OLcz6DKFJ":"6eHTOubnByI","5jAsEuGPHhX":"6T4bPoETL2s",
+    // Case 12
+    "5WctpFY07rX":"6BTRfzDRb4H","6F7CwKIESvA":"6K6rTIffcpV",
+    "6Cphx1mkxPp":"5iG05KHzKkw","5rpnpEJ5kWf":"5mWZsP8jWsq",
+    // Case 13
+    "6ZfbOkaDC8z":"5vqBFpZokFJ","6nWAaynKkIM":"6CFQaqkcIH6",
+    "5zN9D06dZgR":"6KvATvewqmy","5jxYU184rqu":"6H20XPLWIHt",
+    // Case 14
+    "5vinoQSyUqE":"6oF2xjLJPmI","6J5CoPcfnwe":"6UAGztwZp8r",
+    "6V5VXdTcEzK":"5uphVyycJOa","6A4BQja4eIP":"6RJDXce1hos",
+    // Case 15
+    "6aSHuMs5dJe":"6fyw8qFfi2r","5uxJ2XYuGuj":"6RBmfVt7YyO",
+    "61dX1N6rmDg":"6hbAeqHPcI6","6rG7sF4sioW":"6g7LSRkteQh",
+    // Case 16
+    "5u6KubxtF4h":"5evmXN93TrV","5hiYAYql7xp":"6pFjdJXDb8h",
+    "6Q5PVuFicvL":"6TK8lnK76zb","5osbcfRM2U1":"615RIjAKCFT"
+  };
+
+  var lastQuizVar=null;
+  var lastDiagKey='';
+  var SECONDARY_PATH_VARS={
+    "6F7vRpBDac8":1,"6TcEIFwLjuK":1,"5nCunfN90IU":1,"5bp7HOxZdEQ":1,
+    "5pd30XzFLMa":1,"60eB0NWzC6P":1,"5ZR6QUBXoVf":1,"6KBrb3sEfur":1,
+    "5tDuHbUwH2W":1,"5mC5GeyjRBF":1,"6eHTOubnByI":1,"5iG05KHzKkw":1,
+    "6KvATvewqmy":1,"5uphVyycJOa":1,"6hbAeqHPcI6":1,"6TK8lnK76zb":1
+  };
+  var _secPathAcc={};
+  var _secPathRowY={};
+  var PATHOLOGY_ORDER=['Pleural Effusion','Pneumothorax','Alveolar Syndrome','Interstitial Syndrome'];
+
+  function _detectPathologyRows(){
+    var rows={};
+    var container=document.getElementById('slide-window')||document.body;
+    try{
+      var walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT,null,false);
+      var node;
+      while((node=walker.nextNode())){
+        var text=(node.textContent||'').trim();
+        if(PATHOLOGY_ORDER.indexOf(text)<0) continue;
+        var el=node.parentElement;
+        var posEl=el;
+        while(posEl&&posEl!==container){
+          try{if(/absolute|relative/.test(window.getComputedStyle(posEl).position)) break;}catch(e){}
+          posEl=posEl.parentElement;
+        }
+        var target=(posEl&&posEl!==container)?posEl:el;
+        if(!target) continue;
+        var rect=target.getBoundingClientRect();
+        if(!(text in rows)&&(rect.height>0||rect.width>0)){
+          rows[text]=rect.top+rect.height/2;
+        }
+      }
+    }catch(e){}
+    return rows;
+  }
+
+  function _findPathologyForClick(clickedEl,rowYMap){
+    try{
+      var rect=clickedEl.getBoundingClientRect();
+      var midY=rect.top+rect.height/2;
+      var bestName=null,bestDist=Infinity;
+      for(var name in rowYMap){
+        var dist=Math.abs(midY-rowYMap[name]);
+        if(dist<bestDist){bestDist=dist;bestName=name;}
+      }
+      return bestName;
+    }catch(e){return null;}
+  }
+
+  function getSlideSignals(){
+    var signals={gcSlide:null,lessonLoc:null,hash:'',histState:null,dsKeys:[]};
+    try{
+      var player=typeof GetPlayer==='function'&&GetPlayer();
+      if(player){
+        if(!window._qcMethodsDumped){
+          window._qcMethodsDumped=true;
+          var methods=[];
+          for(var k in player){try{if(typeof player[k]==='function')methods.push(k);}catch(e){}}
+          console.log('[QuizCapture] GetPlayer() methods:',methods.join(', ')||'(none found)');
+        }
+        if(typeof player.GetCurrentSlide==='function') signals.gcSlide=player.GetCurrentSlide();
+      }
+    }catch(e){}
+    try{
+      var api=window.parent&&window.parent.API;
+      if(api) signals.lessonLoc=api.LMSGetValue('cmi.core.lesson_location')||null;
+    }catch(e){}
+    try{ signals.hash=window.location.hash||''; }catch(e){}
+    try{ signals.histState=window.history.state?JSON.stringify(window.history.state).substring(0,200):null; }catch(e){}
+    try{
+      if(window.DS&&typeof window.DS==='object'){
+        signals.dsKeys=Object.keys(window.DS).slice(0,20);
+        if(!window._qcDSDumped&&signals.dsKeys.length>0){
+          window._qcDSDumped=true;
+          console.log('[QuizCapture] window.DS:',JSON.stringify(window.DS).substring(0,500));
+        }
+      }
+    }catch(e){}
+    return signals;
+  }
+
+  function refreshCurrentSlide(){
+    try{
+      var s=getSlideSignals();
+      var diagKey=JSON.stringify([s.gcSlide,s.lessonLoc,s.hash,s.histState]);
+      if(diagKey!==lastDiagKey){
+        lastDiagKey=diagKey;
+        console.log('[QuizCapture] Slide signals'
+          +' | GetCurrentSlide:',JSON.stringify(s.gcSlide)
+          ,'| lesson_location:',JSON.stringify(s.lessonLoc)
+          ,'| hash:',JSON.stringify(s.hash)
+          ,'| history.state:',JSON.stringify(s.histState)
+          ,'| DS keys:',JSON.stringify(s.dsKeys));
+      }
+    }catch(e){}
+  }
+
+  function getSelectedText(){
+    var container=document.getElementById('slide-window')||document.getElementById('slide')||document;
+    var selected=container.querySelectorAll('[aria-checked="true"],[aria-pressed="true"],[aria-selected="true"]');
+    var NAV_RE=/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$|navigation/i;
+    var texts=[];
+    selected.forEach(function(el){
+      var t=(el.getAttribute('aria-label')||el.textContent||'').trim();
+      if(!t){
+        var anc=el.parentElement,n=0;
+        while(anc&&n++<15){
+          if(anc.classList&&anc.classList.contains('slide-object-vectorshape')){
+            t=(anc.textContent||'').trim();if(t)break;
+          }
+          anc=anc.parentElement;
+        }
+      }
+      if(t&&t.length<300&&!NAV_RE.test(t)) texts.push(t);
+    });
+    return texts.join('[,]');
+  }
+
+  function onSlideMounted(slideView){
+    try{
+      var sid=slideView&&slideView.props&&slideView.props.model&&
+              typeof slideView.props.model.get==='function'&&
+              slideView.props.model.get('id');
+      var qv=(sid&&SLIDE_MAP[sid])||null;
+      if(qv&&SECONDARY_PATH_VARS[qv]){ _secPathAcc[qv]={}; _secPathRowY[qv]=null; }
+      lastQuizVar=qv;
+      if(qv) console.log('[QuizCapture] Slide mounted → quiz var:',qv,'(slideId:',sid,')');
+      else if(sid) console.log('[QuizCapture] Non-quiz slide mounted:',sid);
+    }catch(e){}
+  }
+
+  function setupDSPubSub(){
+    try{
+      var pub=window.DS&&window.DS.pubSub;
+      var evts=window.DS&&window.DS.events;
+      if(!pub||!evts||!evts.slide||!evts.slide.HAS_MOUNTED) return false;
+      pub.on(evts.slide.HAS_MOUNTED,onSlideMounted);
+      if(evts.slide.HAS_CHANGED) pub.on(evts.slide.HAS_CHANGED,onSlideMounted);
+      console.log('[QuizCapture] DS.pubSub listener registered');
+      return true;
+    }catch(e){ return false; }
+  }
+
+  if(!setupDSPubSub()){
+    var _dsRetry=0;
+    var _dsTimer=setInterval(function(){
+      if(setupDSPubSub()||++_dsRetry>=30) clearInterval(_dsTimer);
+    },200);
+  }
+
+  if(typeof window.globalProvideData==='function'){
+    var _origGPD=window.globalProvideData;
+    window.globalProvideData=function(key,data){
+      try{
+        if(SLIDE_MAP[key]){
+          lastQuizVar=SLIDE_MAP[key];
+          console.log('[QuizCapture] Slide JS loaded → quiz var:',lastQuizVar,'(key:',key,')');
+        }else if(typeof key==='string'&&/^[A-Za-z0-9]{10,13}$/.test(key)){
+          lastQuizVar=null;
+        }
+      }catch(e){}
+      return _origGPD.apply(this,arguments);
+    };
+  }
+
+  setInterval(refreshCurrentSlide,1000);
+
+  var _navRE=/^(next|back|previous|prev|submit|close|replay|continue|play|pause|menu)$|navigation/i;
+  var _moDebounce=null;
+  var _moQuizVar=null;
+  function _flushCapture(){
+    _moDebounce=null;
+    var qv=_moQuizVar; _moQuizVar=null;
+    if(!qv) return;
+    var txt=getSelectedText();
+    if(txt){
+      var data={};
+      data['CurrentQuiz_'+qv]=txt;
+      try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
+      console.log('[QuizCapture]',qv,'=',txt);
+    }
+  }
+  var _mo=new MutationObserver(function(mutations){
+    var relevant=false;
+    for(var i=0;i<mutations.length;i++){
+      var m=mutations[i];
+      if(m.type==='attributes'){
+        var val=m.target.getAttribute(m.attributeName);
+        if(val==='true') relevant=true;
+      }
+    }
+    if(!relevant) return;
+    var _activeQv=lastQuizVar;
+    if(!_activeQv){
+      try{
+        var _as=document.querySelector('#slide-window [class*="cs-"],.slide-container [class*="cs-"]');
+        if(_as){var _cm=_as.className.match(/cs-([A-Za-z0-9]{10,13})/);if(_cm)_activeQv=SLIDE_MAP[_cm[1]]||null;}
+      }catch(ex){}
+    }
+    if(!_activeQv) return;
+    if(!_moDebounce) _moQuizVar=_activeQv;
+    clearTimeout(_moDebounce);
+    _moDebounce=setTimeout(_flushCapture,300);
+  });
+  _mo.observe(document.body,{
+    attributes:true,
+    attributeFilter:['aria-checked','aria-pressed','aria-selected'],
+    subtree:true
+  });
+
+  function _getAncestorText(el,maxLevels){
+    var n=0;
+    while(el&&n++<maxLevels){
+      var t=(el.getAttribute('aria-label')||el.getAttribute('data-acc-text')||el.textContent||'').trim();
+      if(t&&t.length>0&&t.length<300&&!_navRE.test(t)) return t;
+      el=el.parentElement;
+    }
+    return '';
+  }
+
+  document.addEventListener('change',function(e){
+    try{
+      if(!lastQuizVar) return;
+      var el=e.target;
+      if(el.tagName!=='INPUT') return;
+      var txt=getSelectedText();
+      if(!txt){
+        var raw=(el.getAttribute('aria-label')||el.value||'').trim();
+        if(!raw||_navRE.test(raw)) raw=_getAncestorText(el.parentElement,10);
+        if(raw&&!_navRE.test(raw)) txt=raw;
+      }
+      if(txt&&txt.length<300){
+        var data={};
+        data['CurrentQuiz_'+lastQuizVar]=txt;
+        try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
+        console.log('[QuizCapture][change]',lastQuizVar,'=',txt);
+      }
+    }catch(ex){}
+  },true);
+
+  document.addEventListener('pointerdown',function(e){
+    try{
+      var capturedQuizVar=lastQuizVar;
+      var capturedTarget=e.target;
+      if(!capturedQuizVar){
+        var el=e.target,ids=[],n=0;
+        while(el&&n++<15){if(el.id)ids.push(el.id);el=el.parentElement;}
+        if(ids.indexOf('slide-window')>=0||ids.indexOf('slide')>=0){
+          var s=getSlideSignals();
+          console.log('[QuizCapture] Interaction — no quiz var'
+            +' | Ancestor IDs:',ids.join(', ')
+            ,'| hash:',JSON.stringify(s.hash)
+            ,'| history.state:',JSON.stringify(s.histState));
+        }
+        return;
+      }
+      setTimeout(function(){
+        var txt=getSelectedText();
+        if(!txt) txt=_getAncestorText(capturedTarget,10);
+        if(txt&&txt.length<300){
+          var data={};
+          if(SECONDARY_PATH_VARS[capturedQuizVar]){
+            if(!_secPathRowY[capturedQuizVar]||Object.keys(_secPathRowY[capturedQuizVar]).length===0){
+              _secPathRowY[capturedQuizVar]=_detectPathologyRows();
+              console.log('[QuizCapture] Pathology rows detected:',JSON.stringify(_secPathRowY[capturedQuizVar]));
+            }
+            var rowYMap=_secPathRowY[capturedQuizVar]||{};
+            var pathName=_findPathologyForClick(capturedTarget,rowYMap);
+            if(!_secPathAcc[capturedQuizVar]) _secPathAcc[capturedQuizVar]={};
+            var pathMap=_secPathAcc[capturedQuizVar];
+            if(pathName){
+              if(!pathMap[pathName]) pathMap[pathName]=[];
+              var arr=pathMap[pathName];
+              if(arr.length===0||arr[arr.length-1]!==txt) arr.push(txt);
+            }
+            var parts=[];
+            for(var pi=0;pi<PATHOLOGY_ORDER.length;pi++){
+              var pn=PATHOLOGY_ORDER[pi];
+              if(pathMap[pn]&&pathMap[pn].length>0) parts.push(pn+': '+pathMap[pn].join(', '));
+            }
+            data['CurrentQuiz_'+capturedQuizVar]=parts.length?parts.join('; '):txt;
+          }else{
+            data['CurrentQuiz_'+capturedQuizVar]=txt;
+          }
+          try{window.parent.postMessage({type:'sl_quiz_vars',data:data},'*');}catch(ex){}
+          console.log('[QuizCapture][pd]',capturedQuizVar,'=',data['CurrentQuiz_'+capturedQuizVar]);
+        }
+      },200);
+    }catch(ex){}
+  },true);
+
+  console.log('[QuizCapture] diagnostic listener active, watching',Object.keys(SLIDE_MAP).length,'slides');
+})();
+</script>
 </html>
