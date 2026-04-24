@@ -226,13 +226,11 @@
     return rows;
   }
 
-  function _findPathologyForClick(clickedEl,rowYMap){
+  function _findPathologyForClick(clickY,rowYMap){
     try{
-      var rect=clickedEl.getBoundingClientRect();
-      var midY=rect.top+rect.height/2;
       var bestName=null,bestDist=Infinity;
       for(var name in rowYMap){
-        var dist=Math.abs(midY-rowYMap[name]);
+        var dist=Math.abs(clickY-rowYMap[name]);
         if(dist<bestDist){bestDist=dist;bestName=name;}
       }
       return bestName;
@@ -434,6 +432,8 @@
     try{
       var capturedQuizVar=lastQuizVar;
       var capturedTarget=e.target;
+      var capturedX=e.clientX;
+      var capturedY=e.clientY;
       if(!capturedQuizVar){
         var el=e.target,ids=[],n=0;
         while(el&&n++<15){if(el.id)ids.push(el.id);el=el.parentElement;}
@@ -448,6 +448,24 @@
       }
       setTimeout(function(){
         var txt=getSelectedText();
+        if(!txt&&SECONDARY_PATH_VARS[capturedQuizVar]){
+          try{
+            var _sw=document.getElementById('slide-window')||document.body;
+            var _els=_sw.querySelectorAll('[data-acc-text]');
+            var _best=null,_bestArea=Infinity;
+            for(var _ei=0;_ei<_els.length;_ei++){
+              var _ea=(_els[_ei].getAttribute('data-acc-text')||'').trim();
+              if(!_ea||_ea.length>=200||/^(Rectangle|Group)\b/.test(_ea)||_navRE.test(_ea)) continue;
+              var _er=_els[_ei].getBoundingClientRect();
+              if(_er.width<20||_er.height<5) continue;
+              if(capturedX>=_er.left&&capturedX<=_er.right&&capturedY>=_er.top&&capturedY<=_er.bottom){
+                var _area=_er.width*_er.height;
+                if(_area<_bestArea){_bestArea=_area;_best=_ea;}
+              }
+            }
+            if(_best) txt=_best;
+          }catch(_ex){}
+        }
         if(!txt) txt=_getAncestorText(capturedTarget,10);
         if(txt&&txt.length<300){
           var data={};
@@ -457,7 +475,10 @@
               console.log('[QuizCapture] Pathology rows detected:',JSON.stringify(_secPathRowY[capturedQuizVar]));
             }
             var rowYMap=_secPathRowY[capturedQuizVar]||{};
-            var pathName=_findPathologyForClick(capturedTarget,rowYMap);
+            var pathName=_findPathologyForClick(capturedY,rowYMap);
+            if(pathName&&txt.length>pathName.length&&txt.slice(-(pathName.length+1))===' '+pathName){
+              txt=txt.slice(0,txt.length-pathName.length-1).trim();
+            }
             if(!_secPathAcc[capturedQuizVar]) _secPathAcc[capturedQuizVar]={};
             var pathMap=_secPathAcc[capturedQuizVar];
             if(pathName){
