@@ -1,6 +1,38 @@
 const { getEnv } = require('./config');
 
+// Uses Brevo when BREVO_API_KEY is set, otherwise falls back to SendGrid.
 async function sendEmail({ to, subject, html }) {
+  if (process.env.BREVO_API_KEY) return sendViaBrevo({ to, subject, html });
+  return sendViaSendGrid({ to, subject, html });
+}
+
+async function sendViaBrevo({ to, subject, html }) {
+  const key = getEnv('BREVO_API_KEY');
+  const from = getEnv('BREVO_FROM_EMAIL', false) || getEnv('SENDGRID_FROM_EMAIL');
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': key,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { email: from },
+      to: to.map(email => ({ email })),
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Brevo error (${res.status}): ${JSON.stringify(body)}`);
+  }
+  return { id: body.messageId || '' };
+}
+
+async function sendViaSendGrid({ to, subject, html }) {
   const key = getEnv('SENDGRID_API_KEY');
   const from = getEnv('SENDGRID_FROM_EMAIL');
 
