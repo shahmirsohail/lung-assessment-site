@@ -10,15 +10,15 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function sendFailureAlert(message) {
+async function sendFailureAlert(message, isTest = false) {
   const to = getEnv('ALERT_EMAIL', false) || getEnv('ADMIN_RESULTS_EMAIL', false);
   if (!to) {
     console.error('[keepalive] No ALERT_EMAIL or ADMIN_RESULTS_EMAIL set; alert not sent');
-    return;
+    return null;
   }
   await sendEmail({
     to: [to],
-    subject: 'Assessment site: database keep-alive FAILED',
+    subject: (isTest ? '[TEST] ' : '') + 'Assessment site: database keep-alive FAILED',
     html: `
       <p>The daily Supabase keep-alive check failed at ${new Date().toISOString()}.</p>
       <p><strong>Error:</strong> ${escapeHtml(message)}</p>
@@ -26,9 +26,24 @@ async function sendFailureAlert(message) {
       (restore the project if it is paused) and the SUPABASE_URL setting in Vercel.</p>
     `,
   });
+  return to;
 }
 
 module.exports = async (req, res) => {
+  // Manual test: /api/cron/keepalive?test_alert=1&token=<ADMIN_DASHBOARD_TOKEN>
+  if (req.query?.test_alert) {
+    const token = req.headers['x-admin-token'] || req.query?.token;
+    const expected = getEnv('ADMIN_DASHBOARD_TOKEN', false);
+    if (!expected || token !== expected) return json(res, 401, { ok: false, error: 'Unauthorized' });
+    try {
+      const to = await sendFailureAlert('TEST ALERT ONLY. Nothing is wrong; this confirms alert emails are delivered.', true);
+      if (!to) return json(res, 500, { ok: false, error: 'No ALERT_EMAIL or ADMIN_RESULTS_EMAIL set' });
+      return json(res, 200, { ok: true, test_alert_sent_to: to });
+    } catch (err) {
+      return json(res, 500, { ok: false, error: err.message });
+    }
+  }
+
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers.authorization !== `Bearer ${secret}`) {
     return json(res, 401, { ok: false, error: 'Unauthorized' });
