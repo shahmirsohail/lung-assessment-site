@@ -56,6 +56,10 @@ async function listAttempts({ limit = 100, offset = 0, email = '', moduleType = 
   return supabaseFetch(`attempts?${filters.join('&')}`);
 }
 
+async function pingDatabase() {
+  return supabaseFetch('attempts?select=attempt_id&limit=1');
+}
+
 async function insertEmailLog(log) {
   await supabaseFetch('email_dispatch_log', {
     method: 'POST',
@@ -69,4 +73,5 @@ module.exports = {
   getAttemptById,
   listAttempts,
   insertEmailLog,
+  pingDatabase,
 };
