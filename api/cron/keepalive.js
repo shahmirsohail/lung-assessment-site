@@ -35,12 +35,13 @@ module.exports = async (req, res) => {
     const token = req.headers['x-admin-token'] || req.query?.token;
     const expected = getEnv('ADMIN_DASHBOARD_TOKEN', false);
     if (!expected || token !== expected) return json(res, 401, { ok: false, error: 'Unauthorized' });
+    const provider = process.env.BREVO_API_KEY ? 'brevo' : 'sendgrid (BREVO_API_KEY not set in this deployment)';
     try {
       const to = await sendFailureAlert('TEST ALERT ONLY. Nothing is wrong; this confirms alert emails are delivered.', true);
-      if (!to) return json(res, 500, { ok: false, error: 'No ALERT_EMAIL or ADMIN_RESULTS_EMAIL set' });
-      return json(res, 200, { ok: true, test_alert_sent_to: to });
+      if (!to) return json(res, 500, { ok: false, provider, error: 'No ALERT_EMAIL or ADMIN_RESULTS_EMAIL set' });
+      return json(res, 200, { ok: true, provider, test_alert_sent_to: to });
     } catch (err) {
-      return json(res, 500, { ok: false, error: err.message });
+      return json(res, 500, { ok: false, provider, error: err.message });
     }
   }
 
