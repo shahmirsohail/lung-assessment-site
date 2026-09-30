@@ -2,7 +2,7 @@
 
 ## Project overview
 
-A web-based assessment platform where clinicians complete a Lung Ultrasound (LUS) quiz built in Articulate Storyline 360. Results are stored in Supabase and emailed to the learner and an admin via SendGrid. Deployed on Vercel.
+A web-based assessment platform where clinicians complete a Lung Ultrasound (LUS) quiz built in Articulate Storyline 360. Results are stored in Supabase and emailed to the learner and an admin via Brevo (SendGrid fallback). Deployed on Vercel.
 
 ## Architecture
 
@@ -212,8 +212,15 @@ Also: `email_dispatch_log` table for email audit trail.
 |---|---|---|
 | `SUPABASE_URL` | Yes | PostgREST base URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
-| `SENDGRID_API_KEY` | Yes | Email sending |
-| `SENDGRID_FROM_EMAIL` | Yes | Verified sender address |
+| `BREVO_API_KEY` | Yes* | Email sending via Brevo (used when set) |
+| `BREVO_FROM_EMAIL` | No | Brevo verified sender; falls back to `SENDGRID_FROM_EMAIL` |
+| `BREVO_FROM_NAME` | No | Sender display name (default `Luceat`) |
+| `SENDGRID_API_KEY` | Yes* | Fallback email provider when `BREVO_API_KEY` is unset |
+| `SENDGRID_FROM_EMAIL` | Yes* | Verified sender address (SendGrid) |
+| `ALERT_EMAIL` | No | Keep-alive failure alerts; falls back to `ADMIN_RESULTS_EMAIL` |
+| `ADMIN_DASHBOARD_TOKEN` | Yes | Admin dashboard + keep-alive test trigger |
+
+\* One of Brevo or SendGrid must be configured.
 | `ADMIN_RESULTS_EMAIL` | No | If set, sends copy of results to this address |
 
 ## localStorage keys (client-side)
