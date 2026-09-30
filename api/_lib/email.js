@@ -9,6 +9,7 @@ async function sendEmail({ to, subject, html }) {
 async function sendViaBrevo({ to, subject, html }) {
   const key = getEnv('BREVO_API_KEY');
   const from = getEnv('BREVO_FROM_EMAIL', false) || getEnv('SENDGRID_FROM_EMAIL');
+  const name = getEnv('BREVO_FROM_NAME', false) || 'Luceat';
 
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -18,7 +19,7 @@ async function sendViaBrevo({ to, subject, html }) {
       Accept: 'application/json',
     },
     body: JSON.stringify({
-      sender: { email: from },
+      sender: { name, email: from },
       to: to.map(email => ({ email })),
       subject,
       htmlContent: html,

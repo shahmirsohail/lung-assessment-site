@@ -214,6 +214,7 @@ Also: `email_dispatch_log` table for email audit trail.
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
 | `BREVO_API_KEY` | Yes* | Email sending via Brevo (used when set) |
 | `BREVO_FROM_EMAIL` | No | Brevo verified sender; falls back to `SENDGRID_FROM_EMAIL` |
+| `BREVO_FROM_NAME` | No | Sender display name (default `Luceat`) |
 | `SENDGRID_API_KEY` | Yes* | Fallback email provider when `BREVO_API_KEY` is unset |
 | `SENDGRID_FROM_EMAIL` | Yes* | Verified sender address (SendGrid) |
 | `ALERT_EMAIL` | No | Keep-alive failure alerts; falls back to `ADMIN_RESULTS_EMAIL` |
