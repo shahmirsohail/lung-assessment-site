@@ -204,7 +204,7 @@ Key columns:
 - `responses` (jsonb) — keys like `"Case 1 - Primary Pathology"`, values are the selected answer text
 - `completion_email_sent_at`, `admin_email_sent_at` — prevents duplicate emails on retry
 
-Also: `email_dispatch_log` table for email audit trail.
+Also: `email_dispatch_log` table for email audit trail, and `keepalive_log` (one row per daily keep-alive cron run; must exist or the cron fails and emails an alert).
 
 ## Environment variables (set in Vercel)
 
@@ -220,8 +220,9 @@ Also: `email_dispatch_log` table for email audit trail.
 | `ALERT_EMAIL` | No | Keep-alive failure alerts; falls back to `ADMIN_RESULTS_EMAIL` |
 | `ADMIN_DASHBOARD_TOKEN` | Yes | Admin dashboard + keep-alive test trigger |
 
-\* One of Brevo or SendGrid must be configured.
 | `ADMIN_RESULTS_EMAIL` | No | If set, sends copy of results to this address |
+
+\* One of Brevo or SendGrid must be configured.
 
 ## localStorage keys (client-side)
 

@@ -56,8 +56,14 @@ async function listAttempts({ limit = 100, offset = 0, email = '', moduleType = 
   return supabaseFetch(`attempts?${filters.join('&')}`);
 }
 
+// Writes a heartbeat row: a plain read was not enough to stop Supabase
+// free-tier auto-pausing. Also leaves a record of each cron run.
 async function pingDatabase() {
-  return supabaseFetch('attempts?select=attempt_id&limit=1');
+  await supabaseFetch('keepalive_log', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({}),
+  });
 }
 
 async function insertEmailLog(log) {

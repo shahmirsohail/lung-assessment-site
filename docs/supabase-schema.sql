@@ -29,7 +29,14 @@ create table if not exists public.email_dispatch_log (
   created_at timestamptz not null default now()
 );
 
+-- Daily heartbeat written by /api/cron/keepalive to prevent free-tier pausing.
+create table if not exists public.keepalive_log (
+  id bigint generated always as identity primary key,
+  pinged_at timestamptz not null default now()
+);
+
 alter table public.attempts enable row level security;
+alter table public.keepalive_log enable row level security;
 alter table public.email_dispatch_log enable row level security;
 
 -- RLS is enabled for safety. Server APIs should use SUPABASE_SERVICE_ROLE_KEY,
